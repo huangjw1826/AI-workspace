@@ -151,16 +151,16 @@ docs/          补充文档
 
 - `python`、`node`、`npm` 或 `ffmpeg` 找不到：重新安装对应工具，并确认它们已经加入系统 PATH。
 - 页面打不开：确认访问的是 `http://127.0.0.1:5173`，不是 `https`。
-- 端口被占用：先运行 `./stop-all.ps1`，再运行 `./start-all.ps1`。
+- 端口被占用：先运行 `.\stop-all.ps1`，再运行 `.\start-all.ps1`。
 - 摘要不可用：检查网页设置里的 API Key，转写本身不需要 API Key。
 - 首次转写慢：FunASR 模型可能正在下载或初始化。
-- 前端缺失：运行 `./setup.ps1` 重新安装依赖并构建。
+- 前端缺失：运行 `.\setup.ps1` 重新安装依赖并构建。
 
 更多说明见 [docs/troubleshooting.md](docs/troubleshooting.md)。
 
 ## 克隆可用性说明
 
-这个仓库不会提交依赖、模型、数据库、日志和密钥。新用户 clone 后需要执行 `./setup.ps1` 安装依赖并构建前端；首次转写时 FunASR 会下载模型缓存。也就是说，“克隆即可用”的实际流程是：
+这个仓库不会提交依赖、模型、数据库、日志和密钥。新用户 clone 后需要执行 `.\setup.ps1` 安装依赖并构建前端；首次转写时 FunASR 会下载模型缓存。也就是说，“克隆即可用”的实际流程是：
 
 ```powershell
 git clone https://github.com/huangjw1826/AI-workspace.git
