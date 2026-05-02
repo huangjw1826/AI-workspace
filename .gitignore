@@ -1,0 +1,16 @@
+backend/.venv/
+backend/.env
+.tools/
+.tools/*.zip
+.workbuddy/
+release/
+frontend/node_modules/
+frontend/dist/
+data/*
+!data/.gitkeep
+models/*
+!models/.gitkeep
+logs/*
+!logs/.gitkeep
+__pycache__/
+*.pyc

@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+sqlmodel
+pydantic-settings
+python-multipart
+httpx
+openai
+pydub
+soundfile
+numpy
+funasr
+modelscope
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1+cpu
+torchaudio==2.5.1+cpu
