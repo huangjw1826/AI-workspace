@@ -158,6 +158,7 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     settings = Settings()
+    os.environ.setdefault("MODELSCOPE_CACHE", str(settings.resolved_model_dir))
     ffmpeg_path = Path(settings.ffmpeg_bin)
     if ffmpeg_path.is_file():
         ffmpeg_dir = str(ffmpeg_path.parent)
