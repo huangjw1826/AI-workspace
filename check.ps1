@@ -2,10 +2,9 @@ $ErrorActionPreference = "SilentlyContinue"
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BackendPython = "$Root\backend\.venv\Scripts\python.exe"
-$PortablePython = "$Root\.tools\python\python.exe"
-$NodeExe = "$Root\.tools\node-v24.14.0-win-x64\node.exe"
-$NpmCmd = "$Root\.tools\node-v24.14.0-win-x64\npm.cmd"
-$FfmpegExe = "$Root\.tools\ffmpeg\ffmpeg.exe"
+$LocalNodeExe = "$Root\.tools\node-v24.14.0-win-x64\node.exe"
+$LocalNpmCmd = "$Root\.tools\node-v24.14.0-win-x64\npm.cmd"
+$LocalFfmpegExe = "$Root\.tools\ffmpeg\ffmpeg.exe"
 $FrontendIndex = "$Root\frontend\dist\index.html"
 $BackendEnv = "$Root\backend\.env"
 $DataDir = "$Root\data"
@@ -53,15 +52,25 @@ function Test-PortOpen($Port) {
     return $null -ne $connection
 }
 
-if ((Test-Path -LiteralPath $PortablePython) -and (Test-Path -LiteralPath "$Root\backend\.venv\pyvenv.cfg")) {
-    $portablePythonHome = Split-Path -Parent $PortablePython
-    @(
-        "home = $portablePythonHome",
-        "include-system-site-packages = false",
-        "version = 3.12.13",
-        "executable = $PortablePython",
-        "command = $PortablePython -m venv $Root\backend\.venv"
-    ) | Set-Content -LiteralPath "$Root\backend\.venv\pyvenv.cfg" -Encoding UTF8
+function Resolve-ToolPath($CommandName, $FallbackPath = "") {
+    $tool = Get-Command $CommandName -ErrorAction SilentlyContinue
+    if ($tool -and (Test-CommandRuns $tool.Source)) {
+        return $tool.Source
+    }
+    if ($FallbackPath -and (Test-Path -LiteralPath $FallbackPath) -and (Test-CommandRuns $FallbackPath)) {
+        return $FallbackPath
+    }
+    return $null
+}
+
+function Test-CommandRuns($Path) {
+    try {
+        & $Path --version *> $null
+        return $LASTEXITCODE -eq 0
+    }
+    catch {
+        return $false
+    }
 }
 
 Write-Host ""
@@ -77,26 +86,32 @@ else {
     Write-Status "FAIL" "Backend Python is missing. Run .\setup.ps1"
 }
 
-if (Test-Path -LiteralPath $NodeExe) {
+$NodeExe = Resolve-ToolPath "node" $LocalNodeExe
+if ($NodeExe) {
     $nodeVersion = & $NodeExe --version 2>$null
-    Write-Status "OK" "Bundled Node.js is available: $nodeVersion"
+    Write-Status "OK" "Node.js is available: $nodeVersion"
 }
 else {
-    Write-Status "WARN" "Bundled Node.js is missing: $NodeExe"
+    Write-Status "WARN" "Node.js is missing. Install Node.js and make sure node is available in PATH"
 }
 
-if (Test-Path -LiteralPath $NpmCmd) {
-    Write-Status "OK" "Bundled npm file exists"
+$NpmCmd = Resolve-ToolPath "npm.cmd" $LocalNpmCmd
+if (!$NpmCmd) {
+    $NpmCmd = Resolve-ToolPath "npm" $LocalNpmCmd
+}
+if ($NpmCmd) {
+    Write-Status "OK" "npm is available"
 }
 else {
-    Write-Status "WARN" "Bundled npm file is missing: $NpmCmd"
+    Write-Status "WARN" "npm is missing. Install Node.js and make sure npm is available in PATH"
 }
 
-if (Test-Path -LiteralPath $FfmpegExe) {
-    Write-Status "OK" "ffmpeg file exists"
+$FfmpegExe = Resolve-ToolPath "ffmpeg" $LocalFfmpegExe
+if ($FfmpegExe) {
+    Write-Status "OK" "ffmpeg is available"
 }
 else {
-    Write-Status "FAIL" "ffmpeg file is missing: $FfmpegExe"
+    Write-Status "FAIL" "ffmpeg is missing. Install ffmpeg and make sure ffmpeg is available in PATH"
 }
 
 if (Test-Path -LiteralPath $FrontendIndex) {
