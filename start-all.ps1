@@ -7,7 +7,6 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LogDir = "$Root\logs"
 $BackendPython = "$Root\backend\.venv\Scripts\python.exe"
-$PortablePython = "$Root\.tools\python\python.exe"
 $FrontendDist = "$Root\frontend\dist\index.html"
 $BackendOut = "$LogDir\backend.out.log"
 $BackendErr = "$LogDir\backend.err.log"
@@ -67,17 +66,6 @@ function Show-RecentLog($Path, $Title) {
 }
 
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
-
-if ((Test-Path -LiteralPath $PortablePython) -and (Test-Path -LiteralPath "$Root\backend\.venv\pyvenv.cfg")) {
-    $portablePythonHome = Split-Path -Parent $PortablePython
-    @(
-        "home = $portablePythonHome",
-        "include-system-site-packages = false",
-        "version = 3.12.13",
-        "executable = $PortablePython",
-        "command = $PortablePython -m venv $Root\backend\.venv"
-    ) | Set-Content -LiteralPath "$Root\backend\.venv\pyvenv.cfg" -Encoding UTF8
-}
 
 if (!(Test-Path -LiteralPath $BackendPython)) {
     throw "Backend Python is missing: $BackendPython. Run .\setup.ps1 first."
