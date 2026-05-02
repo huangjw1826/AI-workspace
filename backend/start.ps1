@@ -1,18 +1,13 @@
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ProjectRoot = Split-Path -Parent $Root
-$PortablePython = "$ProjectRoot\.tools\python\python.exe"
-$CodexPython = "C:\Users\13318\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
 Set-Location $Root
 
 function Get-SetupPython {
-    if (Test-Path -LiteralPath $PortablePython) {
-        return $PortablePython
+    $systemPython = Get-Command python -ErrorAction SilentlyContinue
+    if ($systemPython) {
+        return $systemPython.Source
     }
-    if (Test-Path -LiteralPath $CodexPython) {
-        return $CodexPython
-    }
-    return "python"
+    throw "Python is missing. Install Python 3.10-3.12 and make sure python is available in PATH."
 }
 
 if (!(Test-Path ".env")) {
