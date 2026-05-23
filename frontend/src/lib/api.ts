@@ -83,8 +83,12 @@ export function updateStorageSettings(settings: Pick<StorageSettings, "transcrip
   });
 }
 
-export function listRecordings() {
-  return request<Recording[]>("/api/recordings");
+export function listRecordings(query = "", tag = "") {
+  const params = new URLSearchParams();
+  if (query.trim()) params.set("query", query.trim());
+  if (tag.trim()) params.set("tag", tag.trim());
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return request<Recording[]>(`/api/recordings${suffix}`);
 }
 
 export function getRecording(id: string) {
@@ -104,16 +108,60 @@ export function startTranscription(id: string) {
   return request<Task>(`/api/transcribe/${id}`, { method: "POST" });
 }
 
+export function startTranscriptionBatch(recordingIds: string[]) {
+  return request<Task[]>("/api/transcribe/batch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ recording_ids: recordingIds })
+  });
+}
+
 export function startSummary(id: string, mode = "summary") {
   return request<Task>(`/api/summary/${id}?mode=${encodeURIComponent(mode)}`, { method: "POST" });
+}
+
+export function startSummaryBatch(recordingIds: string[], mode = "summary") {
+  return request<Task[]>(`/api/summary/batch?mode=${encodeURIComponent(mode)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ recording_ids: recordingIds })
+  });
 }
 
 export function getTask(id: string) {
   return request<Task>(`/api/tasks/${id}`);
 }
 
+export function cancelTask(id: string) {
+  return request<Task>(`/api/tasks/${id}/cancel`, { method: "POST" });
+}
+
 export function deleteRecording(id: string) {
   return request<{ message: string }>(`/api/recordings/${id}`, { method: "DELETE" });
+}
+
+export function deleteRecordingsBatch(recordingIds: string[]) {
+  return request<{ deleted: string[]; missing: string[] }>("/api/recordings/batch-delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ recording_ids: recordingIds })
+  });
+}
+
+export function updateRecordingTags(id: string, tags: string[]) {
+  return request<Recording>(`/api/recordings/${id}/tags`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tags })
+  });
+}
+
+export function updateTranscriptSegment(recordingId: string, segmentId: string, text: string) {
+  return request<RecordingDetail["segments"][number]>(`/api/recordings/${recordingId}/segments/${segmentId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text })
+  });
 }
 
 export function deleteSummary(id: string) {

@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     transcript_dir: Path = Path("../data/transcripts")
     summary_dir: Path = Path("../data/summaries")
     ffmpeg_bin: str = "ffmpeg"
+    ffmpeg_timeout_seconds: int = 600
 
     asr_device: str = "cpu"
     asr_model: str = "paraformer-zh"
@@ -59,6 +60,8 @@ class Settings(BaseSettings):
     llm_base_url: str = ""
     llm_model: str = ""
     llm_max_completion_tokens: int = 2048
+    llm_timeout_seconds: int = 60
+    llm_retry_attempts: int = 3
     llm_temperature: float | None = None
     llm_top_p: float | None = None
     mimo_api_key: str = ""

@@ -2,17 +2,24 @@ import re
 from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app.config import get_settings
 from app.db.database import get_session
 from app.models import Recording, Summary, Task, TranscriptSegment
 from app.pipeline.workflow import run_summary_task
+from app.services.docx_export import build_docx
 from app.services.export_names import summary_filename
 from app.services.summary_service import SUMMARY_TEMPLATES
+from app.services.task_service import create_or_get_task
 
 router = APIRouter(prefix="/api/summary", tags=["summary"])
 export_router = APIRouter(prefix="/api/summaries", tags=["summary"])
+
+
+class BatchSummaryRequest(BaseModel):
+    recording_ids: list[str] = Field(min_length=1, max_length=200)
 
 
 @router.get("/templates")
@@ -27,6 +34,27 @@ def list_summary_templates() -> list[dict[str, str]]:
     ]
 
 
+@router.post("/batch")
+def summarize_batch(
+    payload: BatchSummaryRequest,
+    background_tasks: BackgroundTasks,
+    mode: str = "summary",
+    session: Session = Depends(get_session),
+) -> list[Task]:
+    if mode not in SUMMARY_TEMPLATES:
+        raise HTTPException(status_code=400, detail="Unknown summary template")
+    tasks: list[Task] = []
+    for recording_id in payload.recording_ids:
+        recording = session.get(Recording, recording_id)
+        if recording is None:
+            continue
+        task, created = create_or_get_task(session, recording, f"summary:{mode}")
+        if created:
+            background_tasks.add_task(run_summary_task, task.id, mode)
+        tasks.append(task)
+    return tasks
+
+
 @router.post("/{recording_id}")
 def summarize(
     recording_id: str,
@@ -39,11 +67,9 @@ def summarize(
         raise HTTPException(status_code=404, detail="Recording not found")
     if mode not in SUMMARY_TEMPLATES:
         raise HTTPException(status_code=400, detail="未知的摘要模板")
-    task = Task(recording_id=recording_id, task_type=f"summary:{mode}")
-    session.add(task)
-    session.commit()
-    session.refresh(task)
-    background_tasks.add_task(run_summary_task, task.id, mode)
+    task, created = create_or_get_task(session, recording, f"summary:{mode}")
+    if created:
+        background_tasks.add_task(run_summary_task, task.id, mode)
     return task
 
 
@@ -52,6 +78,15 @@ def _download_response(content: str, filename: str, media_type: str) -> Response
     return Response(
         content=content,
         media_type=f"{media_type}; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+    )
+
+
+def _download_bytes_response(content: bytes, filename: str, media_type: str) -> Response:
+    encoded = quote(filename)
+    return Response(
+        content=content,
+        media_type=media_type,
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
     )
 
@@ -84,7 +119,7 @@ def _delete_summary_files(summary: Summary, recording: Recording | None) -> None
 @export_router.get("/{summary_id}/export")
 def export_summary(
     summary_id: str,
-    format: str = Query("md", pattern="^(md|txt)$"),
+    format: str = Query("md", pattern="^(md|txt|docx)$"),
     session: Session = Depends(get_session),
 ) -> Response:
     summary = session.get(Summary, summary_id)
@@ -99,6 +134,17 @@ def export_summary(
         content = f"# {title} 摘要\n\n- 模板：{template_name}\n\n{summary.content.strip()}\n"
         filename = summary_filename(title, str(template_name), summary.created_at, "md")
         return _download_response(content, filename, "text/markdown")
+
+    if format == "docx":
+        filename = summary_filename(title, str(template_name), summary.created_at, "docx")
+        return _download_bytes_response(
+            build_docx(
+                f"{title} Summary",
+                [f"Template: {template_name}", "", *_markdown_to_text(summary.content).splitlines()],
+            ),
+            filename,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
 
     content = f"{title} 摘要\n模板：{template_name}\n\n{_markdown_to_text(summary.content)}"
     filename = summary_filename(title, str(template_name), summary.created_at, "txt")

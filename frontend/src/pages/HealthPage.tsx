@@ -12,6 +12,19 @@ export function HealthPage({ health }: { health: HealthStatus | null }) {
         <InfoCard label="API Key" value={health?.llm_configured ? "已配置" : "未配置"} />
         <InfoCard label="Python" value={health?.python ?? "--"} />
       </div>
+      <section className="recent-errors">
+        <div className="section-head">
+          <h3>最近错误</h3>
+          <span>{health?.log_dir ?? "--"}</span>
+        </div>
+        {health?.recent_errors?.length ? (
+          <ul>
+            {health.recent_errors.map((line, index) => <li key={`${index}-${line}`}>{line}</li>)}
+          </ul>
+        ) : (
+          <p className="muted">暂无错误记录。</p>
+        )}
+      </section>
     </section>
   );
 }

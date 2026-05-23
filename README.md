@@ -8,10 +8,13 @@ AI Recorder 是一个面向 Windows 本机使用的录音整理工具。它把�
 
 - 录音库：集中管理音频文件、时长、来源、创建时间和处理状态。
 - 文件上传：在网页里上传 `wav`、`mp3`、`m4a`、`flac`、`aac`、`ogg` 等音频。
+- 音频播放：在录音详情页直接播放音频，并可点击转写时间戳跳转播放位置。
+- 转写校对：可直接编辑转写片段，保存后用于后续摘要和导出。
 - 本地转写：使用 FunASR 在本机 CPU 上完成中文语音转文字。
 - 智能摘要：支持 DeepSeek、通义千问/Qwen、小米 MiMo 等 OpenAI 兼容接口。
 - 多份摘要：同一条录音可以保留多次摘要结果，便于对比不同模板。
-- 导出：转写和摘要可以下载为 Markdown 或 TXT，也可以保存到指定目录。
+- 录音库管理：支持内容搜索、标签维护、多选、批量转写、批量摘要和批量删除。
+- 导出：转写可下载为 Markdown、TXT、JSON、SRT、DOCX；摘要可下载为 Markdown、TXT、DOCX。
 - 目录监控：定时扫描录音目录，新音频自动入库。
 
 ## 克隆后快速开始
@@ -58,7 +61,8 @@ http://127.0.0.1:5173
 4. 在“录音库”上传音频，或在“目录监控”里配置要扫描的录音目录。
 5. 对录音点击“转写”。
 6. 转写完成后选择摘要模板生成摘要。
-7. 下载 Markdown/TXT 文件，或把结果保存到你指定的目录。
+7. 校对转写片段，必要时维护标签或批量处理多条录音。
+8. 下载 Markdown/TXT/JSON/SRT/DOCX 文件，或把结果保存到你指定的目录。
 
 目录监控只负责发现并入库新音频，不会自动转写或自动摘要。这样可以避免误处理大量文件。
 
@@ -79,6 +83,8 @@ LLM_PROVIDER=deepseek
 LLM_API_KEY=your_api_key_here
 LLM_MODEL=
 LLM_BASE_URL=
+LLM_TIMEOUT_SECONDS=60
+LLM_RETRY_ATTEMPTS=3
 ```
 
 支持的服务商预设：
@@ -130,6 +136,14 @@ scripts/       辅助脚本
 docs/          补充文档
 ```
 
+产品版本规划放在：
+
+```text
+docs/product/
+```
+
+当前 3.0 迭代资料见 [docs/product/versions/3.0/README.md](docs/product/versions/3.0/README.md)。
+
 ## 常用命令
 
 ```powershell
@@ -137,6 +151,13 @@ docs/          补充文档
 .\start-all.ps1      # 启动后端和网页服务
 .\stop-all.ps1       # 停止服务
 .\check.ps1          # 检查依赖、端口、配置和服务状态
+```
+
+后端最小测试：
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m unittest tests.test_task_service tests.test_recording_audio tests.test_recording_management
 ```
 
 ## 故障排查

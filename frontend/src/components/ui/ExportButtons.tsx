@@ -1,12 +1,26 @@
 import { Download } from "lucide-react";
 import type { ExportFormat } from "../../lib/types";
 
-export function ExportButtons({ onExport }: { onExport: (format: ExportFormat) => void }) {
+const LABELS: Record<ExportFormat, string> = {
+  md: "MD",
+  txt: "TXT",
+  json: "JSON",
+  srt: "SRT",
+  docx: "DOCX"
+};
+
+export function ExportButtons({
+  onExport,
+  formats = ["md", "txt"]
+}: {
+  onExport: (format: ExportFormat) => void;
+  formats?: ExportFormat[];
+}) {
   return (
     <div className="export-buttons">
-      <button onClick={() => onExport("md")}><Download size={14} /> MD</button>
-      <button onClick={() => onExport("txt")}><Download size={14} /> TXT</button>
+      {formats.map((format) => (
+        <button key={format} onClick={() => onExport(format)}><Download size={14} /> {LABELS[format]}</button>
+      ))}
     </div>
   );
 }
-

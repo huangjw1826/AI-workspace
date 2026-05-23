@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlmodel import Session
 
 from app.api.health import router as health_router
 from app.api.recordings import router as recordings_router
@@ -10,7 +11,9 @@ from app.api.tasks import router as tasks_router
 from app.api.transcribe import router as transcribe_router
 from app.api.watch import router as watch_router
 from app.config import get_settings
-from app.db.database import init_db
+from app.db.database import engine, init_db
+from app.services.runtime_log import configure_logging
+from app.services.task_service import recover_interrupted_tasks
 from app.services.watch_service import watcher
 
 
@@ -35,7 +38,10 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def on_startup() -> None:
+        configure_logging()
         init_db()
+        with Session(engine) as session:
+            recover_interrupted_tasks(session)
         watcher.start()
 
     @app.on_event("shutdown")

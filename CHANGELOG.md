@@ -1,5 +1,78 @@
 # AI Recorder 更改日志
 
+## 2026-05-23 3.0 Phase 0
+
+本次改动启动 3.0 迭代，聚焦任务可靠性地基。
+
+### Added
+- 新增任务服务层，集中处理活动任务复用、启动恢复和取消。
+- 后端启动时会把遗留的 `queued` / `running` 任务标记为中断错误，避免任务永久卡住。
+- 新增 `POST /api/tasks/{task_id}/cancel`，前端任务进度卡片提供“取消”按钮。
+- 新增后端 `unittest` 最小测试，覆盖任务恢复、重复任务复用和取消。
+- 新增 ADR：`docs/decisions/ADR-001-task-execution-model.md`。
+
+### Changed
+- 转写/摘要 API 会复用同一录音同一任务类型的活动任务，避免重复提交。
+- ASR 执行遵守 `ASR_MAX_CONCURRENCY` 的进程内并发限制。
+- ffmpeg 调用增加超时配置 `FFMPEG_TIMEOUT_SECONDS`。
+- LLM client 增加超时和重试配置：`LLM_TIMEOUT_SECONDS`、`LLM_RETRY_ATTEMPTS`。
+- 转写和摘要工作流会在阶段边界检查任务是否已取消。
+
+### Verified
+- 后端：`.\\.venv\\Scripts\\python.exe -m unittest tests.test_task_service`
+- 前端：`cmd /c npm run build`
+
+## 2026-05-23 3.0 Phase 1
+
+本次改动启动播放和校对体验，先完成音频播放与时间轴联动。
+
+### Added
+- 新增 `GET /api/recordings/{recording_id}/audio`，按录音 ID 安全读取已入库音频。
+- 音频接口支持 HTTP Range，便于浏览器播放器按需加载和拖动进度。
+- 录音详情面板增加原生音频播放器。
+- 转写片段时间戳可点击，点击后跳转到对应音频位置并开始播放。
+- 播放过程中当前转写片段会高亮。
+- 新增后端音频接口测试：`tests.test_recording_audio`。
+- 新增 ADR：`docs/decisions/ADR-002-audio-playback-range-api.md`。
+
+### Changed
+- `formatDuration(0)` 现在显示 `0:00`，避免 0 秒片段和播放进度显示为 `--`。
+- 状态筛选补充 `cancelled`。
+
+### Verified
+- 后端：`.\\.venv\\Scripts\\python.exe -m unittest tests.test_recording_audio tests.test_task_service`
+- 后端编译：`.\\.venv\\Scripts\\python.exe -m compileall app tests`
+- 前端：`cmd /c npm run build`
+
+## 2026-05-23 3.0 Phase 2-3
+
+本次改动把 3.0 主线能力继续推进到“可校对、可管理、可交付”。
+
+### Added
+- 新增转写片段编辑接口：`PATCH /api/recordings/{recording_id}/segments/{segment_id}`，保存后同步数据库和转写 JSON 文件。
+- 新增录音标签接口：`PATCH /api/recordings/{recording_id}/tags`。
+- 录音列表搜索支持文件名、标签、转写文本和摘要内容。
+- 新增批量接口：批量转写、批量摘要、批量删除。
+- 转写导出新增 JSON、SRT、DOCX；摘要导出新增 DOCX。
+- 后端新增轮转日志服务，健康检查返回日志目录和最近错误。
+- 前端详情页新增转写编辑、标签维护、更多导出格式；列表页新增多选和批量操作栏。
+- 新增 `tests.test_recording_management`，覆盖编辑、标签、搜索和导出逻辑。
+- 新增 3.0 完成摘要：`docs/product/versions/3.0/completion-summary.md`。
+
+### Changed
+- 日志文件不可写时不再阻断应用启动，避免 Windows 文件权限问题直接压垮后端。
+- 3.0 发布清单更新为当前实现状态，并标注机器验证和人工验收边界。
+
+### Verified
+- 后端：`.\\.venv\\Scripts\\python.exe -m unittest tests.test_task_service tests.test_recording_audio tests.test_recording_management`
+- 后端编译：`.\\.venv\\Scripts\\python.exe -m compileall app tests`
+- 前端：`cmd /c npm run build`
+- HTTP 冒烟：临时数据目录下 `/health` 和 `/api/recordings` 返回正常，前端首页返回 `200`。
+
+### Known limitations
+- 当前机器的 Playwright/Node 浏览器自动化被 `AppData` 权限限制拦截，未完成截图级视觉验收。
+- 现有 `data/app.db` 在冒烟启动时表现为只读，因此本次 HTTP 验证使用临时数据目录，未改动现有数据库。
+
 ## 2026-04-25 优化批次
 
 本次改动聚焦"最优先的 5 个问题"，未改动业务核心逻辑，仅做健壮性与可维护性增强。

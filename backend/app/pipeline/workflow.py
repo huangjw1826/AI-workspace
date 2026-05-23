@@ -10,7 +10,10 @@ from app.config import get_settings
 from app.services.asr_service import ASRService
 from app.services.audio_service import AudioService
 from app.services.export_names import summary_filename
+from app.services.runtime_log import get_logger
 from app.services.summary_service import SUMMARY_TEMPLATES, SummaryService
+
+logger = get_logger()
 
 
 def _now() -> datetime:
@@ -26,6 +29,22 @@ def _update_task(session: Session, task: Task, **values: object) -> None:
     session.refresh(task)
 
 
+def _is_cancelled(session: Session, task: Task) -> bool:
+    session.refresh(task)
+    return task.status == "cancelled"
+
+
+def _finish_cancelled(session: Session, task: Task, recording: Recording | None = None) -> None:
+    task.completed_at = task.completed_at or _now()
+    task.updated_at = _now()
+    session.add(task)
+    if recording is not None and recording.status in {"queued", "normalizing", "transcribing"}:
+        recording.status = "uploaded"
+        recording.updated_at = _now()
+        session.add(recording)
+    session.commit()
+
+
 def run_transcription_task(task_id: str) -> None:
     with Session(engine) as session:
         task = session.get(Task, task_id)
@@ -37,6 +56,9 @@ def run_transcription_task(task_id: str) -> None:
             return
 
         try:
+            if _is_cancelled(session, task):
+                _finish_cancelled(session, task, recording)
+                return
             _update_task(session, task, status="running", progress=10, started_at=_now())
             recording.status = "normalizing"
             recording.updated_at = _now()
@@ -47,6 +69,9 @@ def run_transcription_task(task_id: str) -> None:
             source = Path(recording.original_path)
             normalized = audio_service.normalize(source, recording.id)
             duration = audio_service.duration_seconds(normalized)
+            if _is_cancelled(session, task):
+                _finish_cancelled(session, task, recording)
+                return
 
             recording.normalized_path = str(normalized)
             recording.duration_seconds = duration
@@ -57,6 +82,9 @@ def run_transcription_task(task_id: str) -> None:
             _update_task(session, task, progress=35)
 
             segments = ASRService().transcribe(normalized)
+            if _is_cancelled(session, task):
+                _finish_cancelled(session, task, recording)
+                return
             session.exec(delete(TranscriptSegment).where(TranscriptSegment.recording_id == recording.id))
             for index, segment in enumerate(segments):
                 session.add(
@@ -88,6 +116,7 @@ def run_transcription_task(task_id: str) -> None:
                 completed_at=_now(),
             )
         except Exception as exc:
+            logger.exception("Transcription task failed: %s", task_id)
             recording.status = "error"
             recording.error_message = str(exc)
             recording.updated_at = _now()
@@ -113,6 +142,9 @@ def run_summary_task(task_id: str, mode: str = "summary") -> None:
             return
 
         try:
+            if _is_cancelled(session, task):
+                _finish_cancelled(session, task, recording)
+                return
             _update_task(session, task, status="running", progress=20, started_at=_now())
             segments = session.exec(
                 select(TranscriptSegment)
@@ -124,6 +156,9 @@ def run_summary_task(task_id: str, mode: str = "summary") -> None:
                 raise RuntimeError("Transcript is empty. Run transcription first.")
 
             content = SummaryService().generate(transcript, mode=mode)
+            if _is_cancelled(session, task):
+                _finish_cancelled(session, task, recording)
+                return
             summary = Summary(recording_id=recording.id, mode=mode, content=content)
             session.add(summary)
 
@@ -150,6 +185,7 @@ def run_summary_task(task_id: str, mode: str = "summary") -> None:
                 completed_at=_now(),
             )
         except Exception as exc:
+            logger.exception("Summary task failed: %s", task_id)
             _update_task(
                 session,
                 task,

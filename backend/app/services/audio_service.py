@@ -22,7 +22,13 @@ class AudioService:
             "16000",
             str(output),
         ]
-        subprocess.run(command, check=True, capture_output=True, text=True)
+        subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=self.settings.ffmpeg_timeout_seconds,
+        )
         return output
 
     def duration_seconds(self, source: Path) -> float | None:
@@ -44,7 +50,13 @@ class AudioService:
             str(source),
         ]
         try:
-            result = subprocess.run(command, check=True, capture_output=True, text=True)
+            result = subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=self.settings.ffmpeg_timeout_seconds,
+            )
             payload = json.loads(result.stdout)
             return float(payload["format"]["duration"])
         except Exception:
@@ -57,6 +69,7 @@ class AudioService:
                 check=True,
                 capture_output=True,
                 text=True,
+                timeout=10,
             )
             return True
         except Exception:

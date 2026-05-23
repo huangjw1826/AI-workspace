@@ -1,3 +1,5 @@
+from time import sleep
+
 from openai import OpenAI
 
 from app.config import get_settings
@@ -86,6 +88,7 @@ class SummaryService:
         self.client = OpenAI(
             api_key=self.settings.resolved_llm_api_key,
             base_url=self.settings.resolved_llm_base_url,
+            timeout=self.settings.llm_timeout_seconds,
         ) if self.settings.resolved_llm_api_key else None
 
     def configured(self) -> bool:
@@ -113,9 +116,22 @@ class SummaryService:
     def _complete(self, system_prompt: str, user_content: str) -> tuple[str, str | None]:
         if self.client is None:
             raise RuntimeError("LLM client is not configured.")
-        response = self.client.chat.completions.create(**self._request(system_prompt, user_content))
+        response = self._complete_with_retry(system_prompt, user_content)
         choice = response.choices[0]
         return choice.message.content or "", choice.finish_reason
+
+    def _complete_with_retry(self, system_prompt: str, user_content: str):
+        attempts = max(1, self.settings.llm_retry_attempts)
+        last_error: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                return self.client.chat.completions.create(**self._request(system_prompt, user_content))
+            except Exception as exc:
+                last_error = exc
+                if attempt >= attempts:
+                    break
+                sleep(min(2 ** (attempt - 1), 8))
+        raise RuntimeError(f"LLM request failed after {attempts} attempt(s): {last_error}") from last_error
 
     def _split_transcript(self, transcript: str, max_chars: int) -> list[str]:
         chunks: list[str] = []

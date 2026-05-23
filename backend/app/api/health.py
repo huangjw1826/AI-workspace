@@ -5,6 +5,7 @@ from fastapi import APIRouter
 
 from app.config import get_settings
 from app.services.audio_service import AudioService
+from app.services.runtime_log import recent_errors
 
 router = APIRouter(tags=["health"])
 
@@ -24,4 +25,6 @@ def health() -> dict[str, object]:
         "llm_base_url": settings.resolved_llm_base_url,
         "llm_model": settings.resolved_llm_model,
         "llm_configured": bool(settings.resolved_llm_api_key),
+        "log_dir": str(settings.resolved_log_dir),
+        "recent_errors": recent_errors(),
     }

@@ -25,6 +25,7 @@ export interface Task {
   progress: number;
   error_message?: string;
   result_path?: string;
+  completed_at?: string;
 }
 
 export interface TranscriptSegment {
@@ -64,6 +65,8 @@ export interface HealthStatus {
   llm_base_url: string;
   llm_model: string;
   llm_configured: boolean;
+  log_dir?: string;
+  recent_errors?: string[];
 }
 
 export interface LlmProviderDefault {
@@ -141,4 +144,4 @@ export interface SummaryTemplate {
   description: string;
 }
 
-export type ExportFormat = "md" | "txt";
+export type ExportFormat = "md" | "txt" | "json" | "srt" | "docx";

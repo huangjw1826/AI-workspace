@@ -4,7 +4,9 @@ import { ToastStack, type ToastMessage } from "./components/feedback/ToastStack"
 import { NavBar } from "./components/layout/NavBar";
 import {
   apiUrl,
+  cancelTask,
   deleteRecording,
+  deleteRecordingsBatch,
   deleteSummary,
   getHealth,
   getLlmSettings,
@@ -16,10 +18,14 @@ import {
   listWatchEvents,
   scanWatchDirectory,
   startSummary,
+  startSummaryBatch,
   startTranscription,
+  startTranscriptionBatch,
   testLlmConnectivity,
   updateLlmSettings,
+  updateRecordingTags,
   updateStorageSettings,
+  updateTranscriptSegment,
   updateWatchSettings,
   uploadRecording,
 } from "./lib/api";
@@ -67,6 +73,7 @@ export default function App() {
   const [summaryTemplates, setSummaryTemplates] = React.useState<SummaryTemplate[]>([]);
   const [recordings, setRecordings] = React.useState<Recording[]>([]);
   const [selected, setSelected] = React.useState<RecordingDetail | null>(null);
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
   const [activeTask, setActiveTask] = React.useState<Task | null>(null);
   const [summaryMode, setSummaryMode] = React.useState("structured_summary");
   const [draftFilters, setDraftFilters] = React.useState<LibraryFilters>(EMPTY_FILTERS);
@@ -112,7 +119,7 @@ export default function App() {
       const [healthResult, recordingsResult, llmResult, watchResult, eventsResult, templatesResult, storageResult] =
         await Promise.all([
           getHealth(),
-          listRecordings(),
+          listRecordings(appliedFilters.query),
           getLlmSettings(),
           getWatchSettings(),
           listWatchEvents(),
@@ -152,7 +159,7 @@ export default function App() {
         }
       }
     },
-    [selected?.recording.id]
+    [appliedFilters.query, selected?.recording.id]
   );
 
   React.useEffect(() => {
@@ -160,19 +167,24 @@ export default function App() {
   }, []);
 
   React.useEffect(() => {
-    if (!activeTask || ["completed", "error"].includes(activeTask.status)) return;
+    const visibleIds = new Set(recordings.map((recording) => recording.id));
+    setSelectedIds((ids) => ids.filter((id) => visibleIds.has(id)));
+  }, [recordings]);
+
+  React.useEffect(() => {
+    if (!activeTask || ["completed", "error", "cancelled"].includes(activeTask.status)) return;
     const timer = window.setInterval(async () => {
       try {
         const detail = await getRecording(activeTask.recording_id);
         setSelected(detail);
         setActiveTask(detail.tasks.find((task) => task.id === activeTask.id) ?? activeTask);
-        setRecordings(await listRecordings());
+        setRecordings(await listRecordings(appliedFilters.query));
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
     }, 1500);
     return () => window.clearInterval(timer);
-  }, [activeTask?.id, activeTask?.status]);
+  }, [activeTask?.id, activeTask?.status, appliedFilters.query]);
 
   const filteredRecordings = React.useMemo(() => {
     const normalizedQuery = appliedFilters.query.trim().toLowerCase();
@@ -272,6 +284,118 @@ export default function App() {
     }
   }
 
+  async function handleCancelTask() {
+    if (!activeTask) return;
+    setBusy(true);
+    setError("");
+    try {
+      const task = await cancelTask(activeTask.id);
+      setActiveTask(task);
+      setSelected(await getRecording(task.recording_id));
+      setRecordings(await listRecordings(appliedFilters.query));
+      showToast("任务已取消", "success");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      showToast("取消失败，请查看错误信息", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleUpdateTranscriptSegment(segmentId: string, text: string) {
+    if (!selected) return;
+    setBusy(true);
+    setError("");
+    try {
+      await updateTranscriptSegment(selected.recording.id, segmentId, text);
+      setSelected(await getRecording(selected.recording.id));
+      setRecordings(await listRecordings(appliedFilters.query));
+      showToast("转写片段已保存", "success");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      showToast("转写保存失败，请查看错误信息", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleUpdateRecordingTags(tags: string[]) {
+    if (!selected) return;
+    setBusy(true);
+    setError("");
+    try {
+      await updateRecordingTags(selected.recording.id, tags);
+      await refresh(selected.recording.id);
+      showToast("标签已保存", "success");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      showToast("标签保存失败，请查看错误信息", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runBatchTranscription() {
+    if (selectedIds.length === 0) return;
+    setBusy(true);
+    setError("");
+    try {
+      const tasks = await startTranscriptionBatch(selectedIds);
+      setActiveTask(tasks[0] ?? null);
+      await refresh(selected?.recording.id);
+      showToast(`已创建 ${tasks.length} 个转写任务`, "success");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      showToast("批量转写启动失败", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runBatchSummary() {
+    if (selectedIds.length === 0) return;
+    setBusy(true);
+    setError("");
+    try {
+      const tasks = await startSummaryBatch(selectedIds, summaryMode);
+      setActiveTask(tasks[0] ?? null);
+      await refresh(selected?.recording.id);
+      showToast(`已创建 ${tasks.length} 个摘要任务`, "success");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      showToast("批量摘要启动失败", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleBatchDelete() {
+    if (selectedIds.length === 0) return;
+    setConfirmDialog({
+      title: "批量删除录音",
+      message: `确定删除选中的 ${selectedIds.length} 条录音吗？转写、摘要和应用生成文件会一起清理。`,
+      confirmLabel: "删除",
+      tone: "danger",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        setBusy(true);
+        setError("");
+        try {
+          const result = await deleteRecordingsBatch(selectedIds);
+          if (selected && selectedIds.includes(selected.recording.id)) setSelected(null);
+          setSelectedIds([]);
+          await refresh(selected && selectedIds.includes(selected.recording.id) ? null : undefined);
+          showToast(`已删除 ${result.deleted.length} 条录音`, "success");
+        } catch (err) {
+          setError(err instanceof Error ? err.message : String(err));
+          showToast("批量删除失败，请查看错误信息", "error");
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
+  }
+
   async function saveLlmSettings() {
     setSettingsBusy(true);
     setError("");
@@ -326,7 +450,7 @@ export default function App() {
     try {
       await scanWatchDirectory();
       setWatchEvents(await listWatchEvents());
-      setRecordings(await listRecordings());
+      setRecordings(await listRecordings(appliedFilters.query));
       showToast("目录扫描已完成", "success");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -391,7 +515,7 @@ export default function App() {
         try {
           await deleteSummary(summaryId);
           setSelected(await getRecording(recordingId));
-          setRecordings(await listRecordings());
+          setRecordings(await listRecordings(appliedFilters.query));
           showToast("摘要已删除", "success");
         } catch (err) {
           setError(err instanceof Error ? err.message : String(err));
@@ -403,23 +527,27 @@ export default function App() {
     });
   }
 
-  function applyFilters() {
-    setAppliedFilters({
+  async function applyFilters() {
+    const nextFilters = {
       query: draftFilters.query,
       statuses: [...draftFilters.statuses],
       sources: [...draftFilters.sources],
-    });
+    };
+    setAppliedFilters(nextFilters);
+    setRecordings(await listRecordings(nextFilters.query));
   }
 
-  function resetFilters() {
+  async function resetFilters() {
     setDraftFilters(EMPTY_FILTERS);
     setAppliedFilters(EMPTY_FILTERS);
     setSortKey("created_desc");
+    setRecordings(await listRecordings());
   }
 
-  function clearAppliedQuery() {
+  async function clearAppliedQuery() {
     setDraftFilters((draft) => ({ ...draft, query: "" }));
     setAppliedFilters((filters) => ({ ...filters, query: "" }));
+    setRecordings(await listRecordings());
   }
 
   function clearAppliedStatus(status: string) {
@@ -460,6 +588,8 @@ export default function App() {
             recordings={recordings}
             filteredRecordings={filteredRecordings}
             selected={selected}
+            selectedIds={selectedIds}
+            setSelectedIds={setSelectedIds}
             detailTab={detailTab}
             setDetailTab={setDetailTab}
             summaryMode={summaryMode}
@@ -481,6 +611,12 @@ export default function App() {
             handleDelete={handleDelete}
             runTranscription={runTranscription}
             runSummary={runSummary}
+            runBatchTranscription={runBatchTranscription}
+            runBatchSummary={runBatchSummary}
+            deleteSelectedRecordings={handleBatchDelete}
+            cancelActiveTask={handleCancelTask}
+            updateTranscriptSegment={handleUpdateTranscriptSegment}
+            updateRecordingTags={handleUpdateRecordingTags}
             downloadTranscript={downloadTranscript}
             downloadSummary={downloadSummary}
             deleteSummary={handleDeleteSummary}

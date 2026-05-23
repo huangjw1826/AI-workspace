@@ -1,7 +1,7 @@
 import type { Task } from "./types";
 
 export function formatDuration(value?: number) {
-  if (!value) return "--";
+  if (value === undefined || value === null) return "--";
   const total = Math.round(value);
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
@@ -41,6 +41,8 @@ export function statusLabel(status: string) {
   const labels: Record<string, string> = {
     uploaded: "待转写",
     queued: "排队中",
+    running: "运行中",
+    cancelled: "已取消",
     normalizing: "处理中",
     transcribing: "转写中",
     transcribed: "已转写",
@@ -68,8 +70,7 @@ export function summaryPreview(content: string) {
 
 export function taskLabel(task?: Task | null) {
   if (!task) return "";
-  if (task.task_type === "transcribe") return "正在转写录音";
+  if (task.task_type === "transcribe" || task.task_type === "transcription") return "正在转写录音";
   if (task.task_type.startsWith("summary:")) return "正在生成摘要";
   return task.task_type;
 }
-

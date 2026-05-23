@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 import re
+import threading
 from typing import Any
 
 from app.config import get_settings
@@ -15,6 +16,10 @@ class Segment:
 
 
 class ASRService:
+    _semaphore: threading.BoundedSemaphore | None = None
+    _semaphore_limit: int | None = None
+    _semaphore_lock = threading.Lock()
+
     def __init__(self) -> None:
         self.settings = get_settings()
         self._model: Any | None = None
@@ -47,8 +52,9 @@ class ASRService:
         if not self.package_available():
             raise RuntimeError("FunASR is not installed. Run backend dependency setup first.")
 
-        model = self._load_model()
-        result = model.generate(input=str(audio_path), batch_size_s=300)
+        with self._asr_slot():
+            model = self._load_model()
+            result = model.generate(input=str(audio_path), batch_size_s=300)
         if not result:
             return []
 
@@ -127,3 +133,11 @@ class ASRService:
 
     def _timed_char_count(self, text: str) -> int:
         return sum(1 for char in text if not re.match(r"[\s，。！？!?；;：:、,.…—-]", char))
+
+    def _asr_slot(self) -> threading.BoundedSemaphore:
+        limit = max(1, int(self.settings.asr_max_concurrency))
+        with self._semaphore_lock:
+            if self.__class__._semaphore is None or self.__class__._semaphore_limit != limit:
+                self.__class__._semaphore = threading.BoundedSemaphore(limit)
+                self.__class__._semaphore_limit = limit
+            return self.__class__._semaphore

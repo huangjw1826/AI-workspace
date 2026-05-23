@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=390, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AI Recorder - 得到风格原型</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', 'Segoe UI', sans-serif;
+    background: #f1f2f6; display: flex; justify-content: center; align-items: flex-start;
+    min-height: 100vh; padding: 24px 0;
+  }
+  .phone {
+    width: 390px; background: #f5f5f7; border-radius: 32px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.35); overflow: hidden;
+    height: 840px; display: flex; flex-direction: column;
+    position: relative;
+  }
+
+  /* ===== 状态栏 ===== */
+  .status-bar {
+    height: 54px; background: #fff;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    padding: 0 20px 8px; font-size: 13px; font-weight: 700; color: #111;
+    flex-shrink: 0; position: relative; z-index: 10;
+  }
+  .status-left { display: flex; gap: 6px; align-items: center; }
+  .status-right { display: flex; gap: 5px; align-items: center; font-size: 11px; }
+  .status-signal { display: flex; gap: 1px; align-items: flex-end; }
+  .status-signal i { display: block; width: 3px; background: #111; border-radius: 1px; }
+  .status-signal i:nth-child(1){height:4px;} .status-signal i:nth-child(2){height:6px;}
+  .status-signal i:nth-child(3){height:8px;} .status-signal i:nth-child(4){height:11px;}
+
+  /* ===== 得到风格色彩体系 ===== */
+  :root { --primary: #1a8c5b; --primary-light: #e8f5ee; --bg: #f5f5f7; --card: #fff; --text: #1d2129; --text-sec: #86909c; --border: #ebedf0; --danger: #f5494a; --warn: #e8a020; --success: #1a8c5b; }
+
+  /* ===== 顶栏 ===== */
+  .top-bar {
+    height: 52px; background: #fff; display: flex; align-items: center;
+    justify-content: space-between; padding: 0 20px; position: sticky;
+    top: 0; z-index: 10; flex-shrink: 0;
+  }
+  .top-bar .back-btn { display: flex; align-items: center; gap: 4px; background: none; border: none; font-size: 15px; color: var(--primary); font-weight: 600; cursor: pointer; padding: 6px 0; }
+  .top-bar .tb-title { font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: 0.2px; }
+  .top-bar .tb-action { font-size: 13px; color: var(--primary); font-weight: 600; background: none; border: none; cursor: pointer; padding: 6px 0; }
+
+  /* ===== 内容区 ===== */
+  .content { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .content::-webkit-scrollbar { display: none; }
+
+  /* ===== 页面通用 ===== */
+  .page { display: none; flex-direction: column; height: 100%; }
+  .page.active { display: flex; }
+
+  /* ===== 引导页 ===== */
+  .onboard { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 32px; }
+  .onboard-logo { width: 88px; height: 88px; border-radius: 24px; background: linear-gradient(135deg, var(--primary), #22b378); display: flex; align-items: center; justify-content: center; font-size: 40px; color: #fff; margin-bottom: 28px; box-shadow: 0 12px 32px rgba(26,140,91,0.3); }
+  .onboard h2 { font-size: 26px; font-weight: 800; color: var(--text); margin-bottom: 10px; letter-spacing: 0.5px; }
+  .onboard .subtitle { font-size: 14px; color: var(--text-sec); text-align: center; line-height: 1.7; margin-bottom: 36px; }
+  .onboard .field { width: 100%; margin-bottom: 14px; }
+  .onboard .field label { display: block; font-size: 13px; font-weight: 600; color: var(--text-sec); margin-bottom: 6px; }
+  .onboard .field input {
+    width: 100%; padding: 13px 16px; border: 1.5px solid var(--border); border-radius: 12px;
+    font-size: 14px; outline: none; background: #fff; color: var(--text); transition: border-color 0.2s;
+  }
+  .onboard .field input:focus { border-color: var(--primary); }
+  .onboard .field input::placeholder { color: #c0c6cc; }
+  .onboard .btn-primary {
+    width: 100%; padding: 15px; background: var(--primary); color: #fff; border: none;
+    border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 8px;
+    letter-spacing: 1px; transition: opacity 0.15s; box-shadow: 0 6px 20px rgba(26,140,91,0.3);
+  }
+  .onboard .btn-primary:active { opacity: 0.88; }
+  .onboard .conn-status { margin-top: 16px; font-size: 13px; font-weight: 600; min-height: 20px; }
+
+  /* ===== 搜索栏 ===== */
+  .search-bar {
+    margin: 4px 16px 0; padding: 10px 14px; background: #fff; border-radius: 12px;
+    display: flex; align-items: center; gap: 8px; border: 1.5px solid var(--border);
+    transition: border-color 0.2s;
+  }
+  .search-bar:focus-within { border-color: var(--primary); }
+  .search-bar .s-icon { color: #bbb; font-size: 15px; flex-shrink: 0; }
+  .search-bar input { border: none; outline: none; font-size: 14px; color: var(--text); width: 100%; background: transparent; }
+  .search-bar input::placeholder { color: #c8ccd2; }
+
+  /* ===== 筛选标签 ===== */
+  .filter-row { display: flex; gap: 8px; padding: 12px 16px 4px; overflow-x: auto; }
+  .filter-row::-webkit-scrollbar { display: none; }
+  .filter-tag {
+    padding: 5px 14px; border-radius: 16px; font-size: 12px; font-weight: 600;
+    white-space: nowrap; cursor: pointer; border: none; transition: all 0.15s; flex-shrink: 0;
+  }
+  .filter-tag.active { background: var(--primary); color: #fff; }
+  .filter-tag:not(.active) { background: #ebedf0; color: var(--text-sec); }
+
+  /* ===== 录音列表卡片 ===== */
+  .rec-card {
+    margin: 10px 16px; padding: 16px 18px; background: #fff; border-radius: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04); cursor: pointer; transition: box-shadow 0.15s;
+  }
+  .rec-card:active { box-shadow: 0 2px 12px rgba(0,0,0,0.09); }
+  .rec-card .rc-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .rec-card .rc-name { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.4; flex: 1; }
+  .rec-card .rc-badge {
+    flex-shrink: 0; padding: 3px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; margin-left: 10px;
+  }
+  .rc-badge.done { background: #e8f5ee; color: var(--success); }
+  .rc-badge.ing { background: #e8f0fe; color: #1677ff; }
+  .rc-badge.wait { background: #fff7e6; color: #d48806; }
+  .rc-badge.fail { background: #fff1f0; color: var(--danger); }
+  .rec-card .rc-meta { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 12px; color: var(--text-sec); }
+  .rec-card .rc-meta .dot { width: 3px; height: 3px; border-radius: 50%; background: #c8ccd2; }
+  .rec-card .rc-progress { height: 3px; background: #ebedf0; border-radius: 2px; margin-top: 12px; overflow: hidden; }
+  .rec-card .rc-progress-fill { height: 100%; border-radius: 2px; transition: width 0.5s; }
+  .rc-progress-fill.done { background: var(--success); }
+  .rc-progress-fill.ing { background: #1677ff; }
+
+  /* ===== 空状态 ===== */
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 40px 40px; }
+  .empty-state .e-icon { font-size: 56px; margin-bottom: 20px; opacity: 0.32; }
+  .empty-state .e-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+  .empty-state .e-desc { font-size: 13px; color: var(--text-sec); text-align: center; line-height: 1.6; }
+  .empty-state .e-btn {
+    margin-top: 24px; padding: 11px 28px; background: var(--primary); color: #fff; border: none;
+    border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+
+  /* ===== 底部导航 ===== */
+  .bottom-nav {
+    flex-shrink: 0; height: 62px; background: #fff; display: flex;
+    justify-content: space-around; align-items: center; padding-bottom: 8px;
+    border-top: 1px solid #ebedf0; position: relative; z-index: 10;
+  }
+  .nav-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    background: none; border: none; cursor: pointer; padding: 6px 18px;
+    border-radius: 14px; transition: all 0.15s; position: relative;
+  }
+  .nav-btn .nb-icon { font-size: 22px; line-height: 1; transition: transform 0.15s; }
+  .nav-btn .nb-label { font-size: 10px; font-weight: 600; color: #b0b7c0; transition: color 0.15s; }
+  .nav-btn.active .nb-label { color: var(--primary); }
+  .nav-btn.active .nb-icon { transform: scale(1.08); }
+
+  /* ===== FAB ===== */
+  .fab {
+    position: absolute; bottom: 76px; right: 20px; width: 52px; height: 52px;
+    border-radius: 50%; background: var(--primary); color: #fff; border: none;
+    font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 6px 20px rgba(26,140,91,0.4); z-index: 20; transition: transform 0.15s;
+  }
+  .fab:active { transform: scale(0.92); }
+
+  /* ===== 底部 Sheet ===== */
+  .sheet-mask {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 100;
+    opacity: 0; pointer-events: none; transition: opacity 0.25s;
+  }
+  .sheet-mask.show { opacity: 1; pointer-events: auto; }
+  .sheet {
+    position: fixed; bottom: 0; width: 390px; max-height: 65vh;
+    background: #fff; border-radius: 24px 24px 0 0; z-index: 101;
+    transform: translateY(100%); transition: transform 0.32s cubic-bezier(0.32,0.72,0,1);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .sheet.show { transform: translateY(0); }
+  .sheet-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 20px 14px; border-bottom: 1px solid #f0f0f0; flex-shrink: 0;
+  }
+  .sheet-head h3 { font-size: 16px; font-weight: 700; color: var(--text); }
+  .sheet-head .sh-close { background: none; border: none; font-size: 20px; color: #999; cursor: pointer; padding: 4px; }
+  .sheet-body { flex: 1; overflow-y: auto; padding: 8px 20px 16px; }
+  .sheet-body::-webkit-scrollbar { display: none; }
+  .sheet-foot {
+    padding: 12px 20px 16px; flex-shrink: 0; border-top: 1px solid #f0f0f0;
+  }
+  .sheet-add-btn {
+    width: 100%; padding: 12px; border: 1.5px dashed #d0d5dd; border-radius: 12px;
+    background: none; color: var(--text-sec); font-size: 13px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+    transition: all 0.15s;
+  }
+  .sheet-add-btn:active { background: #f5f5f7; border-color: var(--primary); color: var(--primary); }
+
+  /* ===== 上传项 ===== */
+  .up-item { padding: 14px 0; border-bottom: 1px solid #f5f5f7; }
+  .up-item:last-child { border-bottom: none; }
+  .up-item .ui-top { display: flex; justify-content: space-between; align-items: center; }
+  .up-item .ui-name { font-size: 14px; font-weight: 600; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .up-item .ui-size { font-size: 11px; color: var(--text-sec); flex-shrink: 0; margin-left: 8px; }
+  .up-item .ui-bar { height: 3px; background: #ebedf0; border-radius: 2px; margin-top: 10px; overflow: hidden; }
+  .up-item .ui-bar-fill { height: 100%; border-radius: 2px; transition: width 0.5s; }
+  .up-item .ui-status { font-size: 11px; margin-top: 6px; font-weight: 600; }
+  .ui-bar-fill.u-done { background: var(--success); }
+  .ui-bar-fill.u-ing { background: #1677ff; }
+  .ui-bar-fill.u-wait { background: #d9d9d9; width: 0% !important; }
+  .ui-status.u-done { color: var(--success); }
+  .ui-status.u-ing { color: #1677ff; }
+  .ui-status.u-wait { color: #b0b7c0; }
+  .ui-status.u-fail { color: var(--danger); }
+  .up-item .ui-retry {
+    margin-top: 6px; padding: 4px 12px; border-radius: 8px; border: 1px solid #f5494a33;
+    background: #fff; color: var(--danger); font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+
+  /* ===== 详情页 ===== */
+  .detail-scroll { flex: 1; overflow-y: auto; }
+  .detail-scroll::-webkit-scrollbar { display: none; }
+  .tab-bar {
+    display: flex; background: #fff; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .tab-item {
+    flex: 1; text-align: center; padding: 13px 0; font-size: 14px; font-weight: 600;
+    color: var(--text-sec); cursor: pointer; position: relative; background: none; border: none; transition: color 0.15s;
+  }
+  .tab-item.active { color: var(--text); }
+  .tab-item.active::after {
+    content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 28px; height: 3px; background: var(--primary); border-radius: 2px;
+  }
+  .seg { padding: 16px 20px; border-bottom: 1px solid #f5f5f7; }
+  .seg-time { font-size: 11px; color: var(--primary); font-weight: 700; margin-bottom: 5px; letter-spacing: 0.3px; }
+  .seg-text { font-size: 15px; color: var(--text); line-height: 1.75; }
+  .info-card { margin: 12px 16px; padding: 16px 18px; background: #fff; border-radius: 16px; }
+  .info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f5f5f7; }
+  .info-row:last-child { border-bottom: none; }
+  .info-row .ir-label { font-size: 13px; color: var(--text-sec); }
+  .info-row .ir-value { font-size: 13px; color: var(--text); font-weight: 600; text-align: right; }
+  .summary-card { margin: 12px 16px; padding: 18px; background: #fff; border-radius: 16px; border-left: 4px solid var(--primary); }
+  .summary-card h4 { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+  .summary-card p, .summary-card li { font-size: 14px; color: #444; line-height: 1.7; }
+  .summary-card ul { padding-left: 18px; margin-top: 8px; }
+  .detail-actions { display: flex; gap: 10px; padding: 14px 16px; flex-shrink: 0; background: #fff; border-top: 1px solid var(--border); }
+  .detail-actions .da-btn {
+    flex: 1; padding: 12px; border-radius: 12px; border: none; font-size: 13px; font-weight: 700;
+    cursor: pointer; transition: opacity 0.15s;
+  }
+  .da-btn.export { background: var(--primary); color: #fff; }
+  .da-btn.copy { background: #f0f5f2; color: var(--primary); }
+  .da-btn:active { opacity: 0.85; }
+
+  /* ===== 设置页 ===== */
+  .set-group { margin: 12px 0 0; }
+  .set-group-title { padding: 8px 20px 6px; font-size: 12px; font-weight: 700; color: var(--text-sec); letter-spacing: 0.5px; }
+  .set-card { background: #fff; margin: 0 16px; border-radius: 16px; overflow: hidden; }
+  .set-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 18px; border-bottom: 1px solid #f5f5f7; cursor: pointer; min-height: 50px;
+  }
+  .set-row:last-child { border-bottom: none; }
+  .set-row:active { background: #f9f9fb; }
+  .set-row .sr-label { font-size: 15px; color: var(--text); font-weight: 500; }
+  .set-row .sr-value { font-size: 13px; color: var(--text-sec); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .set-row .sr-arrow { color: #c8ccd2; font-size: 13px; margin-left: 6px; }
+  .set-input {
+    flex: 1; padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 10px;
+    font-size: 14px; outline: none; margin-left: 12px; color: var(--text); background: #f9f9fb;
+  }
+  .set-input:focus { border-color: var(--primary); background: #fff; }
+
+  /* ===== 健康面板 ===== */
+  .health-card { margin: 10px 16px; padding: 16px 18px; background: #fff; border-radius: 16px; }
+  .health-card h4 { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 14px; }
+  .h-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; }
+  .h-row-left { display: flex; align-items: center; gap: 10px; }
+  .h-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .h-dot.ok { background: var(--success); box-shadow: 0 0 6px rgba(26,140,91,0.4); }
+  .h-dot.warn { background: var(--warn); }
+  .h-dot.err { background: var(--danger); }
+  .h-label { font-size: 14px; color: var(--text); }
+  .h-value { font-size: 13px; color: var(--text-sec); font-weight: 600; }
+
+  /* ===== 离线横幅 ===== */
+  .offline-tip {
+    margin: 8px 16px; padding: 10px 16px; background: #fff1f0; border-radius: 12px;
+    display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--danger); font-weight: 600;
+  }
+  .offline-tip .ot-icon { font-size: 16px; }
+
+  /* ===== Toast ===== */
+  .toast {
+    position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%);
+    background: rgba(29,33,41,0.88); color: #fff; padding: 10px 22px;
+    border-radius: 20px; font-size: 13px; z-index: 200; opacity: 0;
+    transition: opacity 0.3s; pointer-events: none; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+
+  /* ===== 动画 ===== */
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+  .fade-up { animation: fadeUp 0.35s ease-out both; }
+</style>
+</head>
+<body>
+
+<div class="phone" id="phone">
+
+  <!-- ======== 状态栏 ======== -->
+  <div class="status-bar">
+    <div class="status-left"><span>9:41</span></div>
+    <div class="status-right">
+      <div class="status-signal"><i></i><i></i><i></i><i></i></div>
+      <span style="font-size:12px;">5G</span>
+      <span>🔋 100%</span>
+    </div>
+  </div>
+
+  <!-- ======== 页面：引导配置 ======== -->
+  <div class="page active" id="page-onboard">
+    <div class="onboard">
+      <div class="onboard-logo">🎙️</div>
+      <h2>AI Recorder</h2>
+      <p class="subtitle">连接您的 PC 服务器<br>随时随地管理录音与转写</p>
+      <div class="field">
+        <label>服务器地址</label>
+        <input type="text" placeholder="https://recorder.xxx.com" value="https://recorder.example.com">
+      </div>
+      <div class="field">
+        <label>API Token</label>
+        <input type="password" placeholder="输入您的 API Token" value="p8xK2m...">
+      </div>
+      <button class="btn-primary" onclick="testConn()">连接服务器</button>
+      <div class="conn-status" id="conn-status"></div>
+    </div>
+  </div>
+
+  <!-- ======== 页面：录音库（首页） ======== -->
+  <div class="page" id="page-lib">
+    <div class="top-bar">
+      <span class="tb-title">AI Recorder</span>
+      <button class="tb-action" onclick="showToast('已刷新')">刷新</button>
+    </div>
+    <div class="content" id="lib-content">
+      <div class="search-bar"><span class="s-icon">🔍</span><input placeholder="搜索录音..."></div>
+      <div class="filter-row">
+        <span class="filter-tag active">全部</span>
+        <span class="filter-tag">已完成</span>
+        <span class="filter-tag">处理中</span>
+        <span class="filter-tag">排队中</span>
+        <span class="filter-tag">失败</span>
+      </div>
+
+      <div class="rec-card fade-up" style="animation-delay:0.05s" onclick="go('detail')">
+        <div class="rc-top">
+          <div class="rc-name">meet-2026-05-23 项目进度讨论</div>
+          <span class="rc-badge done">已完成</span>
+        </div>
+        <div class="rc-meta"><span>23:15</span><span class="dot"></span><span>2 小时前</span></div>
+        <div class="rc-progress"><div class="rc-progress-fill done" style="width:100%"></div></div>
+      </div>
+
+      <div class="rec-card fade-up" style="animation-delay:0.1s" onclick="go('detail')">
+        <div class="rc-top">
+          <div class="rc-name">interview-notes 访谈记录</div>
+          <span class="rc-badge ing">转写中</span>
+        </div>
+        <div class="rc-meta"><span>48:30</span><span class="dot"></span><span>处理中</span></div>
+        <div class="rc-progress"><div class="rc-progress-fill ing" style="width:65%"></div></div>
+      </div>
+
+      <div class="rec-card fade-up" style="animation-delay:0.15s" onclick="go('detail')">
+        <div class="rc-top">
+          <div class="rc-name">lecture-ch3 第三章课程录音</div>
+          <span class="rc-badge wait">排队中</span>
+        </div>
+        <div class="rc-meta"><span>12:05</span><span class="dot"></span><span>5 分钟前</span></div>
+        <div class="rc-progress"><div class="rc-progress-fill" style="width:0%;background:#d9d9d9;"></div></div>
+      </div>
+
+      <div class="empty-state" id="lib-empty" style="display:none;">
+        <div class="e-icon">📁</div>
+        <div class="e-title">还没有录音</div>
+        <div class="e-desc">点击右下角按钮上传音频文件<br>或通过 PC 端导入</div>
+        <button class="e-btn" onclick="openSheet()">📤 上传文件</button>
+      </div>
+    </div>
+
+    <div class="bottom-nav">
+      <button class="nav-btn active" onclick="go('lib')"><span class="nb-icon">📑</span><span class="nb-label">录音库</span></button>
+      <button class="nav-btn" onclick="go('settings')"><span class="nb-icon">⚙</span><span class="nb-label">设置</span></button>
+      <button class="nav-btn" onclick="go('health')"><span class="nb-icon">💚</span><span class="nb-label">健康</span></button>
+    </div>
+    <button class="fab" onclick="openSheet()" title="上传文件">⬆</button>
+  </div>
+
+  <!-- ======== 页面：详情 ======== -->
+  <div class="page" id="page-detail">
+    <div class="top-bar">
+      <button class="back-btn" onclick="go('lib')">← 返回</button>
+      <span class="tb-title" style="font-size:15px;">录音详情</span>
+      <button class="tb-action" onclick="showToast('已删除')" style="color:var(--danger);">删除</button>
+    </div>
+    <div class="tab-bar">
+      <button class="tab-item active" onclick="switchTab('trans')">转写</button>
+      <button class="tab-item" onclick="switchTab('sum')">摘要</button>
+      <button class="tab-item" onclick="switchTab('info')">信息</button>
+    </div>
+    <div class="detail-scroll">
+      <!-- 转写 Tab -->
+      <div id="tab-trans">
+        <div class="seg">
+          <div class="seg-time">00:00 — 00:23</div>
+          <div class="seg-text">今天我们讨论一下项目进度。首先回顾一下上个季度的完成情况，总体来说基本达到了预期目标，有几个亮点值得在报告里重点提一下。</div>
+        </div>
+        <div class="seg">
+          <div class="seg-time">00:23 — 01:05</div>
+          <div class="seg-text">第一个议题是关于下个季度的产品规划。我们需要确认几个关键的功能点，包括用户反馈系统中提到的批量导出功能，以及移动端的适配工作，这个优先级需要重新评估一下。</div>
+        </div>
+        <div class="seg">
+          <div class="seg-time">01:05 — 01:42</div>
+          <div class="seg-text">关于技术架构的调整，张工提到了将部分服务迁移到微服务架构的可行性。大家对此进行了比较充分的讨论，认为现阶段可以先做部分模块的拆分，不建议一次性全部迁移。</div>
+        </div>
+      </div>
+      <!-- 摘要 Tab -->
+      <div id="tab-sum" style="display:none;">
+        <div class="summary-card">
+          <h4>📋 会议摘要</h4>
+          <p>本次项目进度讨论会议主要达成以下结论：</p>
+          <ul>
+            <li>下季度重点：批量导出功能 + 移动端适配</li>
+            <li>微服务架构：先做部分模块拆分试点</li>
+            <li>截止日期：6月15日前完成方案设计</li>
+            <li>责任人：张工（架构）、李工（移动端）</li>
+          </ul>
+        </div>
+        <div style="padding:12px 16px;">
+          <button class="da-btn export" style="width:100%;" onclick="showToast('导出中...')">📥 导出（MD / TXT）</button>
+        </div>
+      </div>
+      <!-- 信息 Tab -->
+      <div id="tab-info" style="display:none;">
+        <div class="info-card">
+          <div class="info-row"><span class="ir-label">文件名</span><span class="ir-value">meet-2026-05-23.wav</span></div>
+          <div class="info-row"><span class="ir-label">时长</span><span class="ir-value">23:15</span></div>
+          <div class="info-row"><span class="ir-label">文件大小</span><span class="ir-value">45.2 MB</span></div>
+          <div class="info-row"><span class="ir-label">格式</span><span class="ir-value">WAV / 16kHz / 单声道</span></div>
+          <div class="info-row"><span class="ir-label">来源</span><span class="ir-value">PC 端上传</span></div>
+          <div class="info-row"><span class="ir-label">创建时间</span><span class="ir-value">2026-05-23 14:30</span></div>
+          <div class="info-row"><span class="ir-label">状态</span><span class="ir-value"><span class="rc-badge done">已完成</span></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="detail-actions" id="da-trans">
+      <button class="da-btn copy" onclick="showToast('已复制全部转写')">📋 复制全部</button>
+      <button class="da-btn export" onclick="showToast('导出中...')">📥 导出</button>
+    </div>
+  </div>
+
+  <!-- ======== 页面：设置 ======== -->
+  <div class="page" id="page-set">
+    <div class="top-bar">
+      <button class="back-btn" onclick="go('lib')">← 返回</button>
+      <span class="tb-title">设置</span>
+      <span></span>
+    </div>
+    <div class="content">
+      <div class="set-group">
+        <div class="set-group-title">服务器</div>
+        <div class="set-card">
+          <div class="set-row">
+            <span class="sr-label">服务器地址</span>
+            <input class="set-input" value="https://recorder.example.com" style="width:160px;">
+          </div>
+          <div class="set-row">
+            <span class="sr-label">API Token</span>
+            <input class="set-input" type="password" value="p8xK2m..." style="width:120px;">
+          </div>
+          <div class="set-row" onclick="showToast('延迟 23ms ✓')">
+            <span class="sr-label">连接测试</span>
+            <span class="sr-value" style="color:var(--success);">✓ 已连接 (23ms)</span>
+          </div>
+        </div>
+      </div>
+      <div class="set-group">
+        <div class="set-group-title">后端配置（只读）</div>
+        <div class="set-card">
+          <div class="set-row">
+            <span class="sr-label">LLM 模型</span>
+            <span class="sr-value">DeepSeek / deepseek-chat</span>
+          </div>
+          <div class="set-row">
+            <span class="sr-label">存储目录</span>
+            <span class="sr-value" style="max-width:110px;">C:\Users\...</span>
+          </div>
+          <div class="set-row" onclick="showToast('请在 PC 端管理')">
+            <span class="sr-label">在 PC 上管理</span>
+            <span class="sr-arrow">›</span>
+          </div>
+        </div>
+      </div>
+      <div class="set-group">
+        <div class="set-group-title">关于</div>
+        <div class="set-card">
+          <div class="set-row"><span class="sr-label">App 版本</span><span class="sr-value">v1.0.0 (build 1)</span></div>
+          <div class="set-row">
+            <span class="sr-label">服务器状态</span>
+            <span class="sr-value" style="color:var(--success);">● 在线</span>
+          </div>
+        </div>
+      </div>
+      <div style="height:24px;"></div>
+    </div>
+    <div class="bottom-nav">
+      <button class="nav-btn" onclick="go('lib')"><span class="nb-icon">📑</span><span class="nb-label">录音库</span></button>
+      <button class="nav-btn active" onclick="go('settings')"><span class="nb-icon">⚙</span><span class="nb-label">设置</span></button>
+      <button class="nav-btn" onclick="go('health')"><span class="nb-icon">💚</span><span class="nb-label">健康</span></button>
+    </div>
+  </div>
+
+  <!-- ======== 页面：健康面板 ======== -->
+  <div class="page" id="page-hlth">
+    <div class="top-bar">
+      <button class="back-btn" onclick="go('lib')">← 返回</button>
+      <span class="tb-title">系统健康</span>
+      <button class="tb-action" onclick="showToast('已刷新')">刷新</button>
+    </div>
+    <div class="content">
+      <div class="health-card">
+        <h4>服务状态</h4>
+        <div class="h-row"><div class="h-row-left"><span class="h-dot ok"></span><span class="h-label">FastAPI 后端</span></div><span class="h-value">运行中</span></div>
+        <div class="h-row"><div class="h-row-left"><span class="h-dot ok"></span><span class="h-label">Cloudflare Tunnel</span></div><span class="h-value">已连接</span></div>
+        <div class="h-row"><div class="h-row-left"><span class="h-dot ok"></span><span class="h-label">ffmpeg</span></div><span class="h-value">v6.1.1 ✓</span></div>
+      </div>
+      <div class="health-card">
+        <h4>转写引擎</h4>
+        <div class="h-row"><div class="h-row-left"><span class="h-dot ok"></span><span class="h-label">FunASR</span></div><span class="h-value">Paraformer-zh 已加载</span></div>
+        <div class="h-row"><div class="h-row-left"><span class="h-dot ok"></span><span class="h-label">ASR 模型</span></div><span class="h-value">paraformer-zh/16k</span></div>
+      </div>
+      <div class="health-card">
+        <h4>LLM 配置</h4>
+        <div class="h-row"><div class="h-row-left"><span class="h-dot ok"></span><span class="h-label">供应商</span></div><span class="h-value">DeepSeek API</span></div>
+        <div class="h-row"><div class="h-row-left"><span class="h-dot ok"></span><span class="h-label">模型</span></div><span class="h-value">deepseek-chat</span></div>
+        <div class="h-row"><div class="h-row-left"><span class="h-dot ok"></span><span class="h-label">连接状态</span></div><span class="h-value" style="color:var(--success);">正常</span></div>
+      </div>
+      <div class="health-card">
+        <h4>系统信息</h4>
+        <div class="h-row"><div class="h-row-left"><span class="h-label">Python 版本</span></div><span class="h-value">3.12.2</span></div>
+        <div class="h-row"><div class="h-row-left"><span class="h-label">后端版本</span></div><span class="h-value">v0.1.0</span></div>
+        <div class="h-row"><div class="h-row-left"><span class="h-label">运行时长</span></div><span class="h-value">3 天 7 小时</span></div>
+      </div>
+      <div style="height:24px;"></div>
+    </div>
+    <div class="bottom-nav">
+      <button class="nav-btn" onclick="go('lib')"><span class="nb-icon">📑</span><span class="nb-label">录音库</span></button>
+      <button class="nav-btn" onclick="go('settings')"><span class="nb-icon">⚙</span><span class="nb-label">设置</span></button>
+      <button class="nav-btn active" onclick="go('health')"><span class="nb-icon">💚</span><span class="nb-label">健康</span></button>
+    </div>
+  </div>
+
+  <!-- ======== 上传 Sheet ======== -->
+  <div class="sheet-mask" id="sheet-mask" onclick="closeSheet()"></div>
+  <div class="sheet" id="sheet">
+    <div class="sheet-head">
+      <h3>📤 上传文件</h3>
+      <button class="sh-close" onclick="closeSheet()">✕</button>
+    </div>
+    <div class="sheet-body" id="sheet-body">
+      <!-- JS 动态填充 -->
+    </div>
+    <div class="sheet-foot">
+      <button class="sheet-add-btn" onclick="addFiles()">＋ 选择更多文件</button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+</div>
+
+<script>
+let upItems = [
+  { name: 'meet-2026-05-23.wav', size: '45.2 MB', pct: 100, st: 'done' },
+  { name: 'interview-notes.m4a',  size: '128.7 MB', pct: 0,   st: 'wait' },
+];
+
+function go(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const map = { onboard:'page-onboard', lib:'page-lib', detail:'page-detail', settings:'page-set', health:'page-hlth' };
+  document.getElementById(map[page]).classList.add('active');
+  // 同步底部导航
+  const navMap = { lib:0, settings:1, health:2 };
+  if (navMap[page] !== undefined) syncNav(navMap[page]);
+  if (page === 'lib') renderLibCards();
+}
+
+function syncNav(activeIdx) {
+  document.querySelectorAll('.bottom-nav').forEach(nav => {
+    nav.querySelectorAll('.nav-btn').forEach((b,i) => b.classList.toggle('active', i===activeIdx));
+  });
+}
+
+function renderLibCards() {
+  // 已有静态卡片，无需额外操作
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-trans').style.display = 'none';
+  document.getElementById('tab-sum').style.display = 'none';
+  document.getElementById('tab-info').style.display = 'none';
+  document.getElementById('da-trans').style.display = 'none';
+  if (name === 'trans') { document.getElementById('tab-trans').style.display='block'; document.querySelectorAll('.tab-item')[0].classList.add('active'); document.getElementById('da-trans').style.display='flex'; }
+  if (name === 'sum')   { document.getElementById('tab-sum').style.display='block'; document.querySelectorAll('.tab-item')[1].classList.add('active'); }
+  if (name === 'info')  { document.getElementById('tab-info').style.display='block'; document.querySelectorAll('.tab-item')[2].classList.add('active'); }
+}
+
+function openSheet() {
+  renderSheet();
+  document.getElementById('sheet-mask').classList.add('show');
+  document.getElementById('sheet').classList.add('show');
+  startUpload();
+}
+function closeSheet() {
+  document.getElementById('sheet-mask').classList.remove('show');
+  document.getElementById('sheet').classList.remove('show');
+}
+
+function renderSheet() {
+  const body = document.getElementById('sheet-body');
+  body.innerHTML = upItems.map((it,i) => {
+    let barClass='', fillClass='', statusHtml='';
+    if (it.st==='done')    { fillClass='u-done'; barClass=''; statusHtml='<div class="ui-status u-done">✅ 已完成</div>'; }
+    else if (it.st==='ing') { fillClass='u-ing';  barClass=''; statusHtml=`<div class="ui-status u-ing">上传中 ${it.pct}%</div>`; }
+    else if (it.st==='wait') { fillClass='u-wait'; barClass=''; statusHtml='<div class="ui-status u-wait">⏳ 等待中...</div>'; }
+    else if (it.st==='fail') { fillClass=''; barClass=''; statusHtml=`<div class="ui-status u-fail">⚠ 上传失败：网络超时</div><button class="ui-retry" onclick="retry(${i})">🔄 重试</button>`; }
+    return `<div class="up-item">
+      <div class="ui-top"><span class="ui-name">🎵 ${it.name}</span><span class="ui-size">${it.size}</span></div>
+      <div class="ui-bar"><div class="ui-bar-fill ${fillClass}" style="width:${it.st==='wait'?0:it.pct}%"></div></div>
+      ${statusHtml}
+    </div>`;
+  }).join('');
+}
+
+function startUpload() {
+  const first = upItems.find(it => it.st==='ing' || it.st==='wait');
+  if (!first || first.st==='ing') { /* 已经在上传 */ return; }
+  first.st = 'ing';
+  renderSheet();
+  simulateProgress(first);
+}
+
+function simulateProgress(item) {
+  const iv = setInterval(() => {
+    item.pct += Math.floor(Math.random()*12)+4;
+    if (item.pct >= 100) { item.pct=100; item.st='done'; clearInterval(iv); renderSheet(); startUpload(); }
+    else renderSheet();
+  }, 350);
+}
+
+function addFiles() {
+  upItems.push({ name: 'lecture-part4.mp3', size: '18.5 MB', pct: 0, st: 'wait' });
+  upItems.push({ name: 'voice-memo-0523.opus', size: '3.2 MB', pct: 0, st: 'wait' });
+  renderSheet();
+  showToast('已添加 2 个文件到队列');
+  startUpload();
+}
+
+function retry(idx) {
+  upItems[idx].st = 'wait';
+  renderSheet();
+  showToast('正在重试...');
+  setTimeout(() => { upItems[idx].st='ing'; renderSheet(); startUpload(); }, 600);
+}
+
+function testConn() {
+  const el = document.getElementById('conn-status');
+  el.style.color = 'var(--text-sec)'; el.textContent = '正在连接...';
+  setTimeout(() => { el.style.color = 'var(--success)'; el.textContent = '✓ 连接成功（延迟 23ms）'; setTimeout(()=>go('lib'), 900); }, 1400);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// 导航联动：所有 .nav-btn 点击时同步
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    // 父级 .bottom-nav 中的索引
+    const nav = this.closest('.bottom-nav');
+    const idx = [...nav.querySelectorAll('.nav-btn')].indexOf(this);
+    syncNav(idx);
+  });
+});
+
+// 初始化：直接进入 App（跳过引导）
+// 通过 URL hash #app 控制
+if (window.location.hash === '#app') go('lib');
+else document.getElementById('page-onboard').classList.add('active');
+</script>
+</body>
+</html>

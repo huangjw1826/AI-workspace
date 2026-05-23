@@ -35,7 +35,7 @@ export function SummaryCard({
           {isLatest && <mark className="latest-badge">最新</mark>}
         </button>
         <div className="summary-actions">
-          <ExportButtons onExport={onExport} />
+          <ExportButtons onExport={onExport} formats={["md", "txt", "docx"]} />
           <button className="icon-danger" disabled={busy} onClick={onDelete} title="删除摘要" aria-label="删除摘要">
             <Trash2 size={14} />
           </button>
@@ -51,4 +51,3 @@ export function SummaryCard({
     </article>
   );
 }
-

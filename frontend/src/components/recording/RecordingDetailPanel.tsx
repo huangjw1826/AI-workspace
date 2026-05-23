@@ -1,5 +1,5 @@
 import React from "react";
-import { FileAudio, Loader2, Sparkles } from "lucide-react";
+import { Clock3, FileAudio, Loader2, Sparkles, XCircle } from "lucide-react";
 import {
   formatDate,
   formatDuration,
@@ -7,6 +7,7 @@ import {
   taskLabel,
   toggleValue,
 } from "../../lib/format";
+import { apiUrl } from "../../lib/api";
 import type { DetailTab } from "../../lib/viewTypes";
 import type { ExportFormat, RecordingDetail, SummaryTemplate, Task } from "../../lib/types";
 import { ExportButtons } from "../ui/ExportButtons";
@@ -24,11 +25,19 @@ export function RecordingDetailPanel(props: {
   busy: boolean;
   runTranscription: () => void;
   runSummary: (mode: string) => void;
+  cancelActiveTask: () => void;
+  updateTranscriptSegment: (segmentId: string, text: string) => void;
+  updateRecordingTags: (tags: string[]) => void;
   downloadTranscript: (format: ExportFormat) => void;
   downloadSummary: (summaryId: string, format: ExportFormat) => void;
   deleteSummary: (summaryId: string) => void;
 }) {
   const { selected } = props;
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  const [currentTime, setCurrentTime] = React.useState(0);
+  const [editingSegmentId, setEditingSegmentId] = React.useState<string | null>(null);
+  const [segmentDraft, setSegmentDraft] = React.useState("");
+  const [tagDraft, setTagDraft] = React.useState("");
   const [summaryPickerOpen, setSummaryPickerOpen] = React.useState(false);
   const [expandedSummaryIds, setExpandedSummaryIds] = React.useState<string[]>([]);
 
@@ -46,24 +55,55 @@ export function RecordingDetailPanel(props: {
       if (retained.length > 0) return retained;
       return latest ? [latest.id] : [];
     });
-  }, [selected?.recording.id, selected?.summaries.length]);
+    setEditingSegmentId(null);
+    setSegmentDraft("");
+    setTagDraft(selected.recording.tags);
+  }, [selected?.recording.id, selected?.recording.tags, selected?.summaries.length]);
 
   if (!selected) {
     return <aside className="detail-panel empty-panel">选择一条录音查看详情</aside>;
   }
 
   const activeTemplate = props.summaryTemplates.find((template) => template.id === props.summaryMode);
+  const audioSrc = apiUrl(`/api/recordings/${selected.recording.id}/audio`);
   const sortedSummaries = [...selected.summaries].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
   const latestSummaryId = sortedSummaries[0]?.id;
+  const canCancelTask = props.activeTask && !["completed", "error", "cancelled"].includes(props.activeTask.status);
 
   function toggleSummary(summaryId: string) {
     setExpandedSummaryIds((ids) => toggleValue(ids, summaryId));
   }
 
+  function seekTo(startTime: number) {
+    if (!audioRef.current) return;
+    audioRef.current.currentTime = Math.max(0, startTime);
+    audioRef.current.play().catch(() => undefined);
+  }
+
+  function isActiveSegment(startTime: number, endTime: number) {
+    if (endTime <= startTime) return Math.abs(currentTime - startTime) < 0.75;
+    return currentTime >= startTime && currentTime <= endTime;
+  }
+
+  function startSegmentEdit(segmentId: string, text: string) {
+    setEditingSegmentId(segmentId);
+    setSegmentDraft(text);
+  }
+
+  function saveSegmentEdit(segmentId: string) {
+    props.updateTranscriptSegment(segmentId, segmentDraft);
+    setEditingSegmentId(null);
+  }
+
+  function saveTags() {
+    props.updateRecordingTags(tagDraft.split(/[,\n]/));
+  }
+
   return (
     <aside className="detail-panel">
+      <div className="detail-fixed-region">
       <header className="detail-hero">
         <div className="detail-title">
           <div className="detail-icon"><Sparkles size={18} /></div>
@@ -90,6 +130,20 @@ export function RecordingDetailPanel(props: {
         </div>
       </div>
       <p className="muted">当前摘要模板：{activeTemplate?.name ?? "结构化摘要"}</p>
+      <section className="audio-player-panel" aria-label="音频播放">
+        <div>
+          <span>音频播放</span>
+          <strong>{formatDuration(currentTime)} / {formatDuration(selected.recording.duration_seconds)}</strong>
+        </div>
+        <audio
+          ref={audioRef}
+          controls
+          preload="metadata"
+          src={audioSrc}
+          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+          onLoadedMetadata={(event) => setCurrentTime(event.currentTarget.currentTime)}
+        />
+      </section>
       {summaryPickerOpen && (
         <div className="summary-picker" role="dialog" aria-modal="true" aria-label="选择摘要模板">
           <div className="summary-picker-card">
@@ -120,7 +174,14 @@ export function RecordingDetailPanel(props: {
         <div className="task">
           <span>{taskLabel(props.activeTask)}</span>
           <progress value={props.activeTask.progress} max={100} />
-          <span>{props.activeTask.status} {props.activeTask.progress}%</span>
+          <div className="task-footer">
+            <span>{props.activeTask.status} {props.activeTask.progress}%</span>
+            {canCancelTask && (
+              <button className="secondary compact" disabled={props.busy} onClick={props.cancelActiveTask}>
+                <XCircle size={14} /> 取消
+              </button>
+            )}
+          </div>
         </div>
       )}
       <div className="tabs">
@@ -128,12 +189,36 @@ export function RecordingDetailPanel(props: {
         <button className={props.detailTab === "summary" ? "active" : ""} onClick={() => props.setDetailTab("summary")}>摘要</button>
         <button className={props.detailTab === "info" ? "active" : ""} onClick={() => props.setDetailTab("info")}>信息</button>
       </div>
+      </div>
+      <div className="detail-scroll-region">
       {props.detailTab === "transcript" && (
         <section className="tab-body">
-          <div className="section-head"><h3>转写内容</h3>{selected.segments.length > 0 && <ExportButtons onExport={props.downloadTranscript} />}</div>
-          {selected.segments.length === 0 ? <p className="muted">还没有转写结果。</p> : selected.segments.map((segment) => (
-            <article className="segment" key={segment.id}><span>{formatDuration(segment.start_time)} - {formatDuration(segment.end_time)}</span><p>{segment.text}</p></article>
-          ))}
+          <div className="section-head"><h3>转写内容</h3>{selected.segments.length > 0 && <ExportButtons onExport={props.downloadTranscript} formats={["md", "txt", "json", "srt", "docx"]} />}</div>
+          {selected.segments.length === 0 ? <p className="muted">还没有转写结果。</p> : selected.segments.map((segment) => {
+            const active = isActiveSegment(segment.start_time, segment.end_time);
+            const editing = editingSegmentId === segment.id;
+            return (
+              <article className={active ? "segment active" : "segment"} key={segment.id}>
+                <div className="segment-toolbar">
+                  <button className="segment-time" onClick={() => seekTo(segment.start_time)}>
+                    <Clock3 size={13} /> {formatDuration(segment.start_time)} - {formatDuration(segment.end_time)}
+                  </button>
+                  {!editing && <button className="secondary compact" onClick={() => startSegmentEdit(segment.id, segment.text)}>编辑</button>}
+                </div>
+                {editing ? (
+                  <div className="segment-editor">
+                    <textarea value={segmentDraft} onChange={(event) => setSegmentDraft(event.target.value)} />
+                    <div className="button-row">
+                      <button className="primary compact" disabled={props.busy || !segmentDraft.trim()} onClick={() => saveSegmentEdit(segment.id)}>保存</button>
+                      <button className="secondary compact" onClick={() => setEditingSegmentId(null)}>取消</button>
+                    </div>
+                  </div>
+                ) : (
+                  <p>{segment.text}</p>
+                )}
+              </article>
+            );
+          })}
         </section>
       )}
       {props.detailTab === "summary" && (
@@ -168,6 +253,13 @@ export function RecordingDetailPanel(props: {
       )}
       {props.detailTab === "info" && (
         <section className="tab-body info-list">
+          <div className="tag-editor">
+            <label>
+              <span>标签</span>
+              <input value={tagDraft} placeholder="用逗号分隔标签" onChange={(event) => setTagDraft(event.target.value)} />
+            </label>
+            <button className="secondary compact" disabled={props.busy} onClick={saveTags}>保存标签</button>
+          </div>
           <InfoRow label="文件名" value={selected.recording.filename} />
           <InfoRow label="格式" value={selected.recording.format} />
           <InfoRow label="大小" value={formatSize(selected.recording.file_size_bytes)} />
@@ -180,6 +272,7 @@ export function RecordingDetailPanel(props: {
           <InfoRow label="内容指纹" value={selected.recording.content_hash || "--"} />
         </section>
       )}
+      </div>
     </aside>
   );
 }
@@ -187,4 +280,3 @@ export function RecordingDetailPanel(props: {
 function InfoRow({ label, value }: { label: string; value: string }) {
   return <div className="info-row"><span>{label}</span><strong>{value}</strong></div>;
 }
-

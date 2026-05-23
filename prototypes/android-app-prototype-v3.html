@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AI Recorder - 得到风格原型 v3</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif; background: #F5F5F7; overflow: hidden; }
+
+/* 模拟手机容器 */
+.phone-container { width: 390px; height: 844px; margin: 40px auto; background: #FFFFFF; border-radius: 40px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; position: relative; border: 8px solid #1A1A1A; }
+
+/* 状态栏 */
+.status-bar { height: 54px; background: #FFFFFF; display: flex; justify-content: space-between; align-items: flex-end; padding: 0 24px 8px; font-size: 14px; font-weight: 600; color: #1D2129; position: relative; z-index: 100; }
+.status-bar .time { position: absolute; left: 50%; transform: translateX(-50%); bottom: 8px; font-size: 14px; font-weight: 700; }
+.status-bar .icons { display: flex; gap: 4px; align-items: center; }
+.status-icons { display: flex; gap: 4px; align-items: center; }
+
+/* 顶栏 */
+.top-bar { height: 52px; background: #FFFFFF; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 0.5px solid #E5E6EB; position: relative; z-index: 100; }
+.top-bar .title { font-size: 18px; font-weight: 700; color: #1D2129; }
+.top-bar .actions { display: flex; gap: 16px; align-items: center; }
+.top-bar .action-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+
+/* 图标 SVG 统一风格 */
+.icon { width: 24px; height: 24px; stroke: #1D2129; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.icon-primary { stroke: #1A8C5B; }
+.icon-white { stroke: #FFFFFF; }
+.icon-light { stroke: #86909C; }
+.icon-sm { width: 18px; height: 18px; }
+.icon-lg { width: 28px; height: 28px; }
+
+/* 主内容区 */
+.main-content { height: calc(100% - 54px - 52px - 56px); overflow-y: auto; background: #F5F5F7; }
+.main-content::-webkit-scrollbar { display: none; }
+
+/* 底栏 - 常驻 */
+.bottom-bar { height: 56px; background: #FFFFFF; display: flex; border-top: 0.5px solid #E5E6EB; position: absolute; bottom: 0; left: 0; right: 0; z-index: 100; }
+.bottom-bar .tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; cursor: pointer; transition: all 0.2s; }
+.bottom-bar .tab.active { color: #1A8C5B; }
+.bottom-bar .tab.inactive { color: #86909C; }
+.bottom-bar .tab-label { font-size: 10px; font-weight: 500; }
+
+/* 录音卡片 */
+.recording-card { background: #FFFFFF; margin: 12px 16px; border-radius: 12px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); cursor: pointer; transition: all 0.2s; }
+.recording-card:active { transform: scale(0.98); }
+.recording-card .card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+.recording-card .card-title { font-size: 15px; font-weight: 600; color: #1D2129; line-height: 1.4; flex: 1; margin-right: 8px; }
+.recording-card .card-status { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+.status-done { background: #E8F8F0; color: #1A8C5B; }
+.status-processing { background: #FFF7E6; color: #D48806; }
+.status-error { background: #FFF1F0; color: #F5222D; }
+.recording-card .card-meta { display: flex; gap: 12px; font-size: 12px; color: #86909C; }
+.recording-card .card-meta-item { display: flex; align-items: center; gap: 4px; }
+
+/* FAB 按钮 */
+.fab { position: absolute; right: 20px; bottom: 76px; width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg, #1A8C5B 0%, #2BAF7A 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(26,140,91,0.35); cursor: pointer; z-index: 99; transition: all 0.2s; }
+.fab:active { transform: scale(0.92); }
+.fab .fab-icon { width: 24px; height: 24px; }
+
+/* 上传 Sheet */
+.upload-sheet { position: absolute; bottom: 0; left: 0; right: 0; background: #FFFFFF; border-radius: 20px 20px 0 0; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); z-index: 200; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); max-height: 70%; display: flex; flex-direction: column; }
+.upload-sheet.show { transform: translateY(0); }
+.upload-sheet .sheet-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 12px; border-bottom: 0.5px solid #E5E6EB; }
+.upload-sheet .sheet-title { font-size: 16px; font-weight: 700; color: #1D2129; }
+.upload-sheet .sheet-close { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.upload-sheet .sheet-body { flex: 1; overflow-y: auto; padding: 12px 20px; }
+.upload-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 0.5px solid #F2F3F5; }
+.upload-item:last-child { border-bottom: none; }
+.upload-item .file-icon { width: 40px; height: 40px; background: #F5F5F7; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.upload-item .file-info { flex: 1; min-width: 0; }
+.upload-item .file-name { font-size: 14px; font-weight: 500; color: #1D2129; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+.upload-item .file-size { font-size: 12px; color: #86909C; }
+.upload-item .upload-progress { width: 60px; height: 4px; background: #E5E6EB; border-radius: 2px; overflow: hidden; }
+.upload-item .upload-progress-bar { height: 100%; background: #1A8C5B; border-radius: 2px; transition: width 0.3s; }
+.upload-item .upload-status { font-size: 12px; font-weight: 500; white-space: nowrap; }
+.upload-status.done { color: #1A8C5B; }
+.upload-status.error { color: #F5222D; }
+.upload-status.waiting { color: #86909C; }
+.upload-status.uploading { color: #D48806; }
+.upload-item .retry-btn { font-size: 12px; color: #1A8C5B; cursor: pointer; font-weight: 500; }
+
+/* 详情页 */
+.detail-tabs { display: flex; background: #FFFFFF; padding: 0 16px; border-bottom: 0.5px solid #E5E6EB; }
+.detail-tab { flex: 1; text-align: center; padding: 12px 0; font-size: 14px; font-weight: 500; color: #86909C; position: relative; cursor: pointer; }
+.detail-tab.active { color: #1A8C5B; font-weight: 600; }
+.detail-tab.active::after { content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 24px; height: 3px; background: #1A8C5B; border-radius: 2px; }
+.detail-content { padding: 16px; }
+.detail-content .section { margin-bottom: 20px; }
+.detail-content .section-title { font-size: 14px; font-weight: 600; color: #1D2129; margin-bottom: 8px; }
+.detail-content .section-text { font-size: 14px; color: #4E5969; line-height: 1.7; }
+
+/* 设置页 */
+.settings-group { margin: 16px; }
+.settings-group-title { font-size: 13px; color: #86909C; font-weight: 500; margin-bottom: 8px; padding-left: 4px; }
+.settings-item { background: #FFFFFF; border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 1px; cursor: pointer; }
+.settings-item:first-child { border-radius: 12px 12px 4px 4px; }
+.settings-item:last-child { border-radius: 4px 4px 12px 12px; margin-bottom: 0; }
+.settings-item .item-left { display: flex; align-items: center; gap: 12px; }
+.settings-item .item-icon { width: 32px; height: 32px; background: #F5F5F7; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.settings-item .item-label { font-size: 15px; color: #1D2129; }
+.settings-item .item-value { font-size: 13px; color: #86909C; }
+.settings-item .item-arrow { width: 16px; height: 16px; }
+
+/* 健康面板 */
+.health-card { background: #FFFFFF; margin: 12px 16px; border-radius: 12px; padding: 16px; }
+.health-card .card-title { font-size: 14px; font-weight: 600; color: #1D2129; margin-bottom: 12px; }
+.health-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid #F2F3F5; }
+.health-item:last-child { border-bottom: none; }
+.health-item .item-left { display: flex; align-items: center; gap: 10px; }
+.health-dot { width: 8px; height: 8px; border-radius: 50%; }
+.health-dot.green { background: #52C41A; }
+.health-dot.orange { background: #FA8C16; }
+.health-dot.red { background: #F5222D; }
+.health-item .item-label { font-size: 14px; color: #4E5969; }
+.health-item .item-value { font-size: 13px; color: #86909C; }
+
+/* 空状态 */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 40px; text-align: center; }
+.empty-state .empty-icon { width: 80px; height: 80px; background: #F5F5F7; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+.empty-state .empty-title { font-size: 16px; font-weight: 600; color: #1D2129; margin-bottom: 8px; }
+.empty-state .empty-desc { font-size: 13px; color: #86909C; line-height: 1.6; }
+
+/* 搜索栏 */
+.search-bar { margin: 12px 16px; background: #FFFFFF; border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 8px; }
+.search-bar .search-icon { width: 18px; height: 18px; flex-shrink: 0; }
+.search-bar input { border: none; outline: none; font-size: 14px; color: #1D2129; flex: 1; background: transparent; font-family: inherit; }
+.search-bar input::placeholder { color: #C9CDD4; }
+
+/* 筛选标签 */
+.filter-chips { display: flex; gap: 8px; padding: 0 16px 12px; overflow-x: auto; }
+.filter-chips::-webkit-scrollbar { display: none; }
+.filter-chip { padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 500; white-space: nowrap; transition: all 0.2s; cursor: pointer; }
+.filter-chip.active { background: #1A8C5B; color: #FFFFFF; }
+.filter-chip.inactive { background: #FFFFFF; color: #4E5969; border: 1px solid #E5E6EB; }
+
+/* 页面切换 */
+.page { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; flex-direction: column; }
+.page.active { display: flex; }
+
+/* Toast */
+.toast { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.78); color: #FFFFFF; padding: 10px 20px; border-radius: 8px; font-size: 14px; z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
+.toast.show { opacity: 1; }
+
+/* 遮罩 */
+.overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 199; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+.overlay.show { opacity: 1; pointer-events: auto; }
+</style>
+</head>
+<body>
+
+<div class="phone-container" id="phone">
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+  
+  <!-- 遮罩 -->
+  <div class="overlay" id="overlay" onclick="closeUploadSheet()"></div>
+
+  <!-- ==================== 录音库页 ==================== -->
+  <div class="page active" id="page-library">
+    <!-- 状态栏 -->
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="time">9:41</span>
+      <div class="icons">
+        <span style="font-size:11px">5G</span>
+        <svg width="16" height="12" viewBox="0 0 16 12"><rect x="0" y="7" width="3" height="5" rx="0.5" fill="#1D2129"/><rect x="4.5" y="4" width="3" height="8" rx="0.5" fill="#1D2129"/><rect x="9" y="1" width="3" height="11" rx="0.5" fill="#1D2129"/><rect x="13.5" y="0" width="2.5" height="12" rx="0.5" fill="#1D2129"/></svg>
+        <svg width="22" height="12" viewBox="0 0 22 12"><rect x="0" y="0" width="20" height="11" rx="2" stroke="#1D2129" stroke-width="1.2" fill="none"/><rect x="2" y="2" width="12" height="7" rx="1" fill="#1A8C5B"/><rect x="19" y="3.5" width="3" height="5" rx="1" fill="#1D2129"/></svg>
+      </div>
+    </div>
+
+    <!-- 顶栏 -->
+    <div class="top-bar">
+      <span class="title">录音库</span>
+      <div class="actions">
+        <div class="action-btn" onclick="showToast('搜索功能')">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+        </div>
+        <div class="action-btn" onclick="showToast('排序切换')">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18M3 12h12M3 18h6"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主内容 -->
+    <div class="main-content" style="flex:1; overflow-y:auto;">
+      <!-- 搜索栏 -->
+      <div class="search-bar">
+        <svg class="icon icon-sm icon-light" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+        <input type="text" placeholder="搜索录音、转写内容..." />
+      </div>
+
+      <!-- 筛选标签 -->
+      <div class="filter-chips">
+        <div class="filter-chip active" onclick="toggleChip(this)">全部</div>
+        <div class="filter-chip inactive" onclick="toggleChip(this)">已完成</div>
+        <div class="filter-chip inactive" onclick="toggleChip(this)">处理中</div>
+        <div class="filter-chip inactive" onclick="toggleChip(this)">失败</div>
+      </div>
+
+      <!-- 录音卡片列表 -->
+      <div class="recording-card" onclick="switchPage('page-detail')">
+        <div class="card-header">
+          <div class="card-title">2026年Q2产品规划讨论会</div>
+          <span class="card-status status-done">✓ 已完成</span>
+        </div>
+        <div class="card-meta">
+          <span class="card-meta-item">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            32:15
+          </span>
+          <span class="card-meta-item">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            18.2 MB
+          </span>
+          <span class="card-meta-item">2026-05-23 14:30</span>
+        </div>
+      </div>
+
+      <div class="recording-card" onclick="switchPage('page-detail')">
+        <div class="card-header">
+          <div class="card-title">客户访谈 - 华为技术有限公司</div>
+          <span class="card-status status-processing">⏳ 转写中</span>
+        </div>
+        <div class="card-meta">
+          <span class="card-meta-item">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            45:20
+          </span>
+          <span class="card-meta-item">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            25.6 MB
+          </span>
+          <span class="card-meta-item">2026-05-23 10:15</span>
+        </div>
+      </div>
+
+      <div class="recording-card" onclick="switchPage('page-detail')">
+        <div class="card-header">
+          <div class="card-title">团队周会 - Sprint 23 复盘</div>
+          <span class="card-status status-done">✓ 已完成</span>
+        </div>
+        <div class="card-meta">
+          <span class="card-meta-item">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            28:40
+          </span>
+          <span class="card-meta-item">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            15.8 MB
+          </span>
+          <span class="card-meta-item">2026-05-22 16:00</span>
+        </div>
+      </div>
+
+      <div class="recording-card" onclick="switchPage('page-detail')">
+        <div class="card-header">
+          <div class="card-title">个人备忘 - 项目思路整理</div>
+          <span class="card-status status-error">⚠ 失败</span>
+        </div>
+        <div class="card-meta">
+          <span class="card-meta-item">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            05:20
+          </span>
+          <span class="card-meta-item">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            3.1 MB
+          </span>
+          <span class="card-meta-item">2026-05-22 09:30</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAB -->
+    <div class="fab" onclick="openUploadSheet()">
+      <svg class="fab-icon" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    </div>
+
+    <!-- 上传 Sheet -->
+    <div class="upload-sheet" id="uploadSheet">
+      <div class="sheet-header">
+        <span class="sheet-title">上传队列</span>
+        <div class="sheet-close" onclick="closeUploadSheet()">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#86909C" stroke-width="2" stroke-linecap="round"><line x1="2" y1="2" x2="14" y2="14"/><line x1="14" y1="2" x2="2" y2="14"/></svg>
+        </div>
+      </div>
+      <div class="sheet-body" id="uploadSheetBody">
+        <!-- 动态填充 -->
+      </div>
+    </div>
+
+    <!-- 底栏 - 常驻 -->
+    <div class="bottom-bar">
+      <div class="tab active" onclick="switchTab('library', this)">
+        <svg class="icon icon-primary" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+        <span class="tab-label">录音库</span>
+      </div>
+      <div class="tab inactive" onclick="switchTab('settings', this)">
+        <svg class="icon icon-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        <span class="tab-label">设置</span>
+      </div>
+      <div class="tab inactive" onclick="switchTab('health', this)">
+        <svg class="icon icon-light" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span class="tab-label">健康</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 详情页 ==================== -->
+  <div class="page" id="page-detail">
+    <!-- 状态栏 -->
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="time">9:41</span>
+      <div class="icons"><span style="font-size:11px">5G</span><svg width="16" height="12" viewBox="0 0 16 12"><rect x="0" y="7" width="3" height="5" rx="0.5" fill="#1D2129"/><rect x="4.5" y="4" width="3" height="8" rx="0.5" fill="#1D2129"/><rect x="9" y="1" width="3" height="11" rx="0.5" fill="#1D2129"/><rect x="13.5" y="0" width="2.5" height="12" rx="0.5" fill="#1D2129"/></svg><svg width="22" height="12" viewBox="0 0 22 12"><rect x="0" y="0" width="20" height="11" rx="2" stroke="#1D2129" stroke-width="1.2" fill="none"/><rect x="2" y="2" width="12" height="7" rx="1" fill="#1A8C5B"/><rect x="19" y="3.5" width="3" height="5" rx="1" fill="#1D2129"/></svg></div>
+    </div>
+
+    <!-- 顶栏 -->
+    <div class="top-bar">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="action-btn" onclick="switchPage('page-library')">
+          <svg class="icon" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        </div>
+        <span class="title" style="font-size:16px;">录音详情</span>
+      </div>
+      <div class="actions">
+        <div class="action-btn" onclick="showToast('删除成功')">
+          <svg class="icon icon-light" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+        </div>
+        <div class="action-btn" onclick="showToast('更多选项')">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 切换 -->
+    <div class="detail-tabs">
+      <div class="detail-tab active" onclick="switchDetailTab(this, 'transcript')">转写</div>
+      <div class="detail-tab" onclick="switchDetailTab(this, 'summary')">摘要</div>
+      <div class="detail-tab" onclick="switchDetailTab(this, 'info')">信息</div>
+    </div>
+
+    <!-- 主内容 -->
+    <div class="main-content" style="flex:1; overflow-y:auto;">
+      <!-- 转写 Tab -->
+      <div class="detail-content" id="tab-transcript">
+        <div class="section">
+          <div class="section-title">转写文本</div>
+          <div class="section-text" style="background:#F5F5F7;padding:14px;border-radius:8px;">
+            主持人（09:32）：各位早上好，欢迎参加2026年Q2产品规划讨论会。今天的议程主要是review Q1的完成情况，以及讨论Q2的重点方向。<br><br>
+            张伟（09:38）：我来汇报一下Q1的情况。整体来说，我们完成了计划中的85%，主要delay在移动端适配这块，预计下周可以交付。<br><br>
+            李婷（09:52）：关于Q2的规划，我建议我们重点关注AI功能的落地。目前竞品已经开始在转写准确率上做文章了，我们需要跟上。
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;padding:0 16px 16px;">
+          <button style="flex:1;padding:10px;border:1.5px solid #1A8C5B;background:#FFFFFF;color:#1A8C5B;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;" onclick="showToast('已复制到剪贴板')">复制文本</button>
+          <button style="flex:1;padding:10px;background:linear-gradient(135deg,#1A8C5B,#2BAF7A);color:#FFFFFF;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;" onclick="showToast('正在导出...')">导出 MD</button>
+        </div>
+      </div>
+
+      <!-- 摘要 Tab -->
+      <div class="detail-content" id="tab-summary" style="display:none;">
+        <div class="section">
+          <div class="section-title">📝 会议摘要</div>
+          <div class="section-text" style="background:#F5F5F7;padding:14px;border-radius:8px;">
+            <p style="margin-bottom:10px;"><strong>会议主题：</strong>2026年Q2产品规划讨论会</p>
+            <p style="margin-bottom:10px;"><strong>参会人员：</strong>张伟、李婷、王芳、主持人</p>
+            <p style="margin-bottom:10px;"><strong>核心结论：</strong></p>
+            <p style="margin-bottom:6px;">1. Q1完成度85%，移动端适配预计下周交付</p>
+            <p style="margin-bottom:6px;">2. Q2重点方向：AI功能落地，提升转写准确率</p>
+            <p style="margin-bottom:6px;">3. 竞品分析：需关注竞品在转写准确率上的进展</p>
+            <p style="margin-bottom:10px;">4. 下次会议时间：2026-05-30 14:00</p>
+            <p><strong>行动项：</strong></p>
+            <p style="margin-bottom:4px;">• 张伟：完成移动端适配（截止 05-30）</p>
+            <p>• 李婷：输出AI功能设计方案（截止 05-28）</p>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;padding:0 16px 16px;">
+          <button style="flex:1;padding:10px;border:1.5px solid #1A8C5B;background:#FFFFFF;color:#1A8C5B;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;" onclick="showToast('已复制到剪贴板')">复制文本</button>
+          <button style="flex:1;padding:10px;background:linear-gradient(135deg,#1A8C5B,#2BAF7A);color:#FFFFFF;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;" onclick="showToast('正在导出...')">导出 MD</button>
+        </div>
+      </div>
+
+      <!-- 信息 Tab -->
+      <div class="detail-content" id="tab-info" style="display:none;">
+        <div style="background:#FFFFFF;margin:12px 16px;border-radius:12px;padding:16px;">
+          <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid #F2F3F5;">
+            <span style="font-size:13px;color:#86909C;">文件名</span>
+            <span style="font-size:13px;color:#1D2129;">Q2产品规划讨论会.wav</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid #F2F3F5;">
+            <span style="font-size:13px;color:#86909C;">时长</span>
+            <span style="font-size:13px;color:#1D2129;">32:15</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid #F2F3F5;">
+            <span style="font-size:13px;color:#86909C;">文件大小</span>
+            <span style="font-size:13px;color:#1D2129;">18.2 MB</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid #F2F3F5;">
+            <span style="font-size:13px;color:#86909C;">创建时间</span>
+            <span style="font-size:13px;color:#1D2129;">2026-05-23 14:30:22</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid #F2F3F5;">
+            <span style="font-size:13px;color:#86909C;">转写状态</span>
+            <span style="font-size:13px;color:#1A8C5B;">已完成</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:10px 0;">
+            <span style="font-size:13px;color:#86909C;">摘要状态</span>
+            <span style="font-size:13px;color:#1A8C5B;">已完成</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底栏 - 常驻 -->
+    <div class="bottom-bar">
+      <div class="tab active" onclick="switchTab('library', this)">
+        <svg class="icon icon-primary" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+        <span class="tab-label">录音库</span>
+      </div>
+      <div class="tab inactive" onclick="switchTab('settings', this)">
+        <svg class="icon icon-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        <span class="tab-label">设置</span>
+      </div>
+      <div class="tab inactive" onclick="switchTab('health', this)">
+        <svg class="icon icon-light" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span class="tab-label">健康</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 设置页 ==================== -->
+  <div class="page" id="page-settings">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="time">9:41</span>
+      <div class="icons"><span style="font-size:11px">5G</span><svg width="16" height="12" viewBox="0 0 16 12"><rect x="0" y="7" width="3" height="5" rx="0.5" fill="#1D2129"/><rect x="4.5" y="4" width="3" height="8" rx="0.5" fill="#1D2129"/><rect x="9" y="1" width="3" height="11" rx="0.5" fill="#1D2129"/><rect x="13.5" y="0" width="2.5" height="12" rx="0.5" fill="#1D2129"/></svg><svg width="22" height="12" viewBox="0 0 22 12"><rect x="0" y="0" width="20" height="11" rx="2" stroke="#1D2129" stroke-width="1.2" fill="none"/><rect x="2" y="2" width="12" height="7" rx="1" fill="#1A8C5B"/><rect x="19" y="3.5" width="3" height="5" rx="1" fill="#1D2129"/></svg></div>
+    </div>
+    <div class="top-bar">
+      <span class="title">设置</span>
+      <div></div>
+    </div>
+    <div class="main-content" style="flex:1; overflow-y:auto;">
+      <div class="settings-group">
+        <div class="settings-group-title">服务器配置</div>
+        <div class="settings-item" onclick="showToast('编辑服务器地址')">
+          <div class="item-left">
+            <div class="item-icon">
+              <svg class="icon icon-sm icon-primary" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+            </div>
+            <span class="item-label">服务器地址</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="item-value">https://xxx.trycloudflare.com</span>
+            <svg class="icon icon-sm icon-light" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+        <div class="settings-item" onclick="showToast('编辑 API Token')">
+          <div class="item-left">
+            <div class="item-icon">
+              <svg class="icon icon-sm icon-primary" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            </div>
+            <span class="item-label">API Token</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="item-value">已配置 ✓</span>
+            <svg class="icon icon-sm icon-light" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+        <div class="settings-item" onclick="showToast('连接测试成功 ✓')">
+          <div class="item-left">
+            <div class="item-icon" style="background:#E8F8F0;">
+              <svg class="icon icon-sm icon-primary" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <span class="item-label">测试连接</span>
+          </div>
+          <svg class="icon icon-sm icon-light" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-group-title">LLM 配置（只读）</div>
+        <div class="settings-item">
+          <div class="item-left">
+            <div class="item-icon">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" style="stroke:#86909C;"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            </div>
+            <span class="item-label">供应商</span>
+          </div>
+          <span class="item-value">OpenAI 兼容</span>
+        </div>
+        <div class="settings-item">
+          <div class="item-left">
+            <div class="item-icon">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" style="stroke:#86909C;"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            </div>
+            <span class="item-label">模型</span>
+          </div>
+          <span class="item-value">Qwen3-30B</span>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-group-title">关于</div>
+        <div class="settings-item">
+          <div class="item-left">
+            <div class="item-icon">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" style="stroke:#86909C;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            </div>
+            <span class="item-label">版本</span>
+          </div>
+          <span class="item-value">v1.0.0 (2026-05-23)</span>
+        </div>
+        <div class="settings-item" onclick="showToast('检查更新中...')">
+          <div class="item-left">
+            <div class="item-icon">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" style="stroke:#86909C;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 7 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <span class="item-label">检查更新</span>
+          </div>
+          <svg class="icon icon-sm icon-light" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底栏 - 常驻 -->
+    <div class="bottom-bar">
+      <div class="tab inactive" onclick="switchTab('library', this)">
+        <svg class="icon icon-light" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+        <span class="tab-label">录音库</span>
+      </div>
+      <div class="tab active" onclick="switchTab('settings', this)">
+        <svg class="icon icon-primary" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        <span class="tab-label">设置</span>
+      </div>
+      <div class="tab inactive" onclick="switchTab('health', this)">
+        <svg class="icon icon-light" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span class="tab-label">健康</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 健康面板页 ==================== -->
+  <div class="page" id="page-health">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="time">9:41</span>
+      <div class="icons"><span style="font-size:11px">5G</span><svg width="16" height="12" viewBox="0 0 16 12"><rect x="0" y="7" width="3" height="5" rx="0.5" fill="#1D2129"/><rect x="4.5" y="4" width="3" height="8" rx="0.5" fill="#1D2129"/><rect x="9" y="1" width="3" height="11" rx="0.5" fill="#1D2129"/><rect x="13.5" y="0" width="2.5" height="12" rx="0.5" fill="#1D2129"/></svg><svg width="22" height="12" viewBox="0 0 22 12"><rect x="0" y="0" width="20" height="11" rx="2" stroke="#1D2129" stroke-width="1.2" fill="none"/><rect x="2" y="2" width="12" height="7" rx="1" fill="#1A8C5B"/><rect x="19" y="3.5" width="3" height="5" rx="1" fill="#1D2129"/></svg></div>
+    </div>
+    <div class="top-bar">
+      <span class="title">系统健康</span>
+      <div class="actions">
+        <div class="action-btn" onclick="showToast('正在刷新...')">
+          <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="main-content" style="flex:1; overflow-y:auto;">
+      <div class="health-card">
+        <div class="card-title">服务状态</div>
+        <div class="health-item">
+          <div class="item-left">
+            <div class="health-dot green"></div>
+            <span class="item-label">FastAPI 后端</span>
+          </div>
+          <span class="item-value">正常</span>
+        </div>
+        <div class="health-item">
+          <div class="item-left">
+            <div class="health-dot green"></div>
+            <span class="item-label">Cloudflare 隧道</span>
+          </div>
+          <span class="item-value">已连接</span>
+        </div>
+      </div>
+
+      <div class="health-card">
+        <div class="card-title">转写引擎</div>
+        <div class="health-item">
+          <div class="item-left">
+            <div class="health-dot green"></div>
+            <span class="item-label">FunASR 模型</span>
+          </div>
+          <span class="item-value">已加载</span>
+        </div>
+        <div class="health-item">
+          <div class="item-left">
+            <div class="health-dot green"></div>
+            <span class="item-label">FFmpeg</span>
+          </div>
+          <span class="item-value">已安装 v6.1</span>
+        </div>
+      </div>
+
+      <div class="health-card">
+        <div class="card-title">LLM 配置</div>
+        <div class="health-item">
+          <div class="item-left">
+            <div class="health-dot green"></div>
+            <span class="item-label">API 连接</span>
+          </div>
+          <span class="item-value">正常</span>
+        </div>
+        <div class="health-item">
+          <div class="item-left">
+            <div class="health-dot green"></div>
+            <span class="item-label">当前模型</span>
+          </div>
+          <span class="item-value">Qwen3-30B</span>
+        </div>
+      </div>
+
+      <div class="health-card">
+        <div class="card-title">系统信息</div>
+        <div class="health-item">
+          <div class="item-left">
+            <div class="health-dot" style="background:#D48806;"></div>
+            <span class="item-label">CPU 使用率</span>
+          </div>
+          <span class="item-value">68%</span>
+        </div>
+        <div class="health-item">
+          <div class="item-left">
+            <div class="health-dot green"></div>
+            <span class="item-label">内存使用</span>
+          </div>
+          <span class="item-value">12.3 / 32 GB</span>
+        </div>
+        <div class="health-item">
+          <div class="item-left">
+            <div class="health-dot green"></div>
+            <span class="item-label">磁盘空间</span>
+          </div>
+          <span class="item-value">158 GB 可用</span>
+        </div>
+        <div class="health-item">
+          <div class="item-left">
+            <div class="health-dot green"></div>
+            <span class="item-label">运行时长</span>
+          </div>
+          <span class="item-value">3 天 7 小时</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底栏 - 常驻 -->
+    <div class="bottom-bar">
+      <div class="tab inactive" onclick="switchTab('library', this)">
+        <svg class="icon icon-light" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+        <span class="tab-label">录音库</span>
+      </div>
+      <div class="tab inactive" onclick="switchTab('settings', this)">
+        <svg class="icon icon-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        <span class="tab-label">设置</span>
+      </div>
+      <div class="tab active" onclick="switchTab('health', this)">
+        <svg class="icon icon-primary" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span class="tab-label">健康</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 页面切换
+function switchPage(pageId) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(pageId).classList.add('active');
+}
+
+// Tab 切换（底栏常驻）
+function switchTab(tabName, tabEl) {
+  // 切换页面
+  const pageMap = { library: 'page-library', settings: 'page-settings', health: 'page-health' };
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(pageMap[tabName]).classList.add('active');
+  
+  // 更新所有底栏的激活状态
+  document.querySelectorAll('.bottom-bar').forEach(bar => {
+    bar.querySelectorAll('.tab').forEach(t => {
+      t.classList.remove('active');
+      t.classList.add('inactive');
+      t.querySelector('.icon').classList.remove('icon-primary');
+      t.querySelector('.icon').classList.add('icon-light');
+      t.querySelector('.tab-label').style.color = '#86909C';
+    });
+  });
+  
+  // 激活当前 tab（所有底栏）
+  document.querySelectorAll('.bottom-bar').forEach(bar => {
+    const targetTab = Array.from(bar.querySelectorAll('.tab')).find(t => t.textContent.trim() === getTabLabel(tabName));
+    if (targetTab) {
+      targetTab.classList.remove('inactive');
+      targetTab.classList.add('active');
+      targetTab.querySelector('.icon').classList.remove('icon-light');
+      targetTab.querySelector('.icon').classList.add('icon-primary');
+      targetTab.querySelector('.tab-label').style.color = '#1A8C5B';
+    }
+  });
+}
+
+function getTabLabel(tabName) {
+  const map = { library: '录音库', settings: '设置', health: '健康' };
+  return map[tabName];
+}
+
+// 详情 Tab 切换
+function switchDetailTab(tabEl, tabName) {
+  document.querySelectorAll('.detail-tab').forEach(t => { t.classList.remove('active'); });
+  tabEl.classList.add('active');
+  
+  document.getElementById('tab-transcript').style.display = tabName === 'transcript' ? 'block' : 'none';
+  document.getElementById('tab-summary').style.display = tabName === 'summary' ? 'block' : 'none';
+  document.getElementById('tab-info').style.display = tabName === 'info' ? 'block' : 'none';
+}
+
+// 筛选标签切换
+function toggleChip(el) {
+  document.querySelectorAll('.filter-chip').forEach(c => {
+    c.classList.remove('active');
+    c.classList.add('inactive');
+  });
+  el.classList.remove('inactive');
+  el.classList.add('active');
+}
+
+// 上传 Sheet
+let uploadQueue = [
+  { name: 'meeting-2026-05-23.wav', size: '45.2 MB', progress: 78, status: 'uploading' },
+  { name: 'interview-notes.m4a', size: '128.7 MB', progress: 0, status: 'waiting' },
+  { name: 'lecture-ch3.mp3', size: '8.3 MB', progress: 100, status: 'done' },
+];
+
+function openUploadSheet() {
+  renderUploadSheet();
+  document.getElementById('uploadSheet').classList.add('show');
+  document.getElementById('overlay').classList.add('show');
+  simulateUpload();
+}
+
+function closeUploadSheet() {
+  document.getElementById('uploadSheet').classList.remove('show');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+function renderUploadSheet() {
+  const body = document.getElementById('uploadSheetBody');
+  body.innerHTML = '';
+  
+  uploadQueue.forEach((item, idx) => {
+    const div = document.createElement('div');
+    div.className = 'upload-item';
+    div.innerHTML = `
+      <div class="file-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1A8C5B" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      </div>
+      <div class="file-info">
+        <div class="file-name">${item.name}</div>
+        <div class="file-size">${item.size}</div>
+      </div>
+      ${item.status === 'uploading' ? `<div class="upload-progress"><div class="upload-progress-bar" style="width:${item.progress}%"></div></div><span class="upload-status uploading">${item.progress}%</span>` : ''}
+      ${item.status === 'waiting' ? `<span class="upload-status waiting">等待中</span>` : ''}
+      ${item.status === 'done' ? `<span class="upload-status done">✓ 完成</span>` : ''}
+      ${item.status === 'error' ? `<span class="upload-status error">失败</span><span class="retry-btn" onclick="retryUpload(${idx})">重试</span>` : ''}
+    `;
+    body.appendChild(div);
+  });
+  
+  // 添加更多文件按钮
+  const addBtn = document.createElement('div');
+  addBtn.className = 'upload-item';
+  addBtn.style.borderBottom = 'none';
+  addBtn.style.justifyContent = 'center';
+  addBtn.style.cursor = 'pointer';
+  addBtn.style.color = '#1A8C5B';
+  addBtn.style.fontSize = '14px';
+  addBtn.style.fontWeight = '500';
+  addBtn.innerHTML = '+ 选择更多文件';
+  addBtn.onclick = () => showToast('打开系统文件选择器...');
+  body.appendChild(addBtn);
+}
+
+function simulateUpload() {
+  const uploadingItem = uploadQueue.find(item => item.status === 'uploading');
+  if (!uploadingItem) {
+    // 检查是否有等待中的
+    const waitingIdx = uploadQueue.findIndex(item => item.status === 'waiting');
+    if (waitingIdx >= 0) {
+      uploadQueue[waitingIdx].status = 'uploading';
+      setTimeout(simulateUpload, 500);
+    } else {
+      showToast('所有文件上传完成 ✓');
+    }
+    renderUploadSheet();
+    return;
+  }
+  
+  uploadingItem.progress += 2;
+  if (uploadingItem.progress >= 100) {
+    uploadingItem.progress = 100;
+    uploadingItem.status = 'done';
+    renderUploadSheet();
+    setTimeout(simulateUpload, 800);
+  } else {
+    renderUploadSheet();
+    setTimeout(simulateUpload, 100);
+  }
+}
+
+function retryUpload(idx) {
+  uploadQueue[idx].status = 'waiting';
+  renderUploadSheet();
+  showToast('已加入队列');
+}
+
+// Toast
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2000);
+}
+</script>
+</body>
+</html>
