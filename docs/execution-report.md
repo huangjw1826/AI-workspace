@@ -4,7 +4,7 @@
 
 ## 已完成
 
-- 已将优化后的部署方案复制到工作区：`deployment-plan.md`
+- 已将优化后的部署方案归档到文档目录：`docs/deployment-plan.md`
 - 已创建后端 FastAPI 项目结构。
 - 已创建前端 React/Vite 项目结构。
 - 已创建本地存储目录：`data/recordings`、`data/normalized`、`data/transcripts`、`data/summaries`。

@@ -5,10 +5,34 @@ $LocalNpm = "$LocalNodeRoot\npm.cmd"
 $LocalFfmpeg = "$Root\.tools\ffmpeg\ffmpeg.exe"
 
 function Get-SetupPython {
+    $pythonLauncher = Get-Command py -ErrorAction SilentlyContinue
+    if ($pythonLauncher) {
+        foreach ($version in @("3.12", "3.11", "3.10")) {
+            $pythonPath = & $pythonLauncher.Source "-$version" -c "import sys; print(sys.executable)" 2>$null
+            if ($LASTEXITCODE -eq 0 -and $pythonPath) {
+                return $pythonPath.Trim()
+            }
+        }
+    }
+
     $systemPython = Get-Command python -ErrorAction SilentlyContinue
     if ($systemPython) {
-        return $systemPython.Source
+        $minorVersion = & $systemPython.Source -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
+        if ($LASTEXITCODE -eq 0 -and @("3.10", "3.11", "3.12") -contains $minorVersion) {
+            return $systemPython.Source
+        }
+        throw "Python $minorVersion is not supported. Install Python 3.10-3.12 and make sure py can find it."
     }
+
+    $python = Get-Command python3 -ErrorAction SilentlyContinue
+    if ($python) {
+        $minorVersion = & $python.Source -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
+        if ($LASTEXITCODE -eq 0 -and @("3.10", "3.11", "3.12") -contains $minorVersion) {
+            return $python.Source
+        }
+        throw "Python $minorVersion is not supported. Install Python 3.10-3.12 and make sure py can find it."
+    }
+
     throw "Python is missing. Install Python 3.10-3.12 and make sure python is available in PATH."
 }
 

@@ -52,20 +52,20 @@ function Test-PortOpen($Port) {
     return $null -ne $connection
 }
 
-function Resolve-ToolPath($CommandName, $FallbackPath = "") {
+function Resolve-ToolPath($CommandName, $FallbackPath = "", $VersionArgs = @("--version")) {
     $tool = Get-Command $CommandName -ErrorAction SilentlyContinue
-    if ($tool -and (Test-CommandRuns $tool.Source)) {
+    if ($tool -and (Test-CommandRuns $tool.Source $VersionArgs)) {
         return $tool.Source
     }
-    if ($FallbackPath -and (Test-Path -LiteralPath $FallbackPath) -and (Test-CommandRuns $FallbackPath)) {
+    if ($FallbackPath -and (Test-Path -LiteralPath $FallbackPath) -and (Test-CommandRuns $FallbackPath $VersionArgs)) {
         return $FallbackPath
     }
     return $null
 }
 
-function Test-CommandRuns($Path) {
+function Test-CommandRuns($Path, $VersionArgs = @("--version")) {
     try {
-        & $Path --version *> $null
+        & $Path @VersionArgs *> $null
         return $LASTEXITCODE -eq 0
     }
     catch {
@@ -106,7 +106,7 @@ else {
     Write-Status "WARN" "npm is missing. Install Node.js and make sure npm is available in PATH"
 }
 
-$FfmpegExe = Resolve-ToolPath "ffmpeg" $LocalFfmpegExe
+$FfmpegExe = Resolve-ToolPath "ffmpeg" $LocalFfmpegExe @("-version")
 if ($FfmpegExe) {
     Write-Status "OK" "ffmpeg is available"
 }

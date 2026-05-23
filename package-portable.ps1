@@ -94,7 +94,6 @@ Write-Step "Copying root launchers and documentation"
     ".gitignore",
     "CHANGELOG.md",
     "README.md",
-    "deployment-plan.md",
     "check.ps1",
     "setup.ps1",
     "start-all.ps1",

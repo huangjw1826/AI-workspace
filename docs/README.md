@@ -5,7 +5,11 @@
 | 目录/文件 | 用途 |
 | --- | --- |
 | `product/` | 产品路线图、版本规划、发布验收和待办池。 |
+| `product/prototypes/` | 产品和移动端原型文件，保留可视化方案的版本线索。 |
 | `decisions/` | 架构决策记录，保存重要技术取舍的原因。 |
+| `deployment-plan.md` | Windows 本地部署边界、运行时版本和技术栈方案。 |
+| `AI-Recorder-产品设计文档.md` | AI Recorder 产品设计资料。 |
+| `android-app-prd.md` | Android 版本产品需求文档。 |
 | `cloud-llm-providers.md` | 云端大模型供应商配置说明。 |
 | `portable.md` | Windows 便携包打包和使用说明。 |
 | `troubleshooting.md` | 常见故障排查。 |

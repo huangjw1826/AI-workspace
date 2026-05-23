@@ -899,7 +899,7 @@ CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173  # CORS 白名单
 AI-workspace/
 ├── README.md                    # 用户使用手册
 ├── CHANGELOG.md                 # 版本变更记录
-├── deployment-plan.md           # 部署方案文档
+├── docs/deployment-plan.md      # 部署方案文档
 ├── setup.ps1                    # 首次安装脚本
 ├── start-all.ps1                # 一键启动
 ├── stop-all.ps1                 # 停止服务

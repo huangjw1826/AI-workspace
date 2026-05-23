@@ -774,7 +774,7 @@ App 核心导航采用**底栏常驻 3-Tab 结构**：
 
 ### 7.5 视觉设计规范
 
-本规范以 v3 原型（`prototypes/android-app-prototype-v3.html`）为准，整体采用**得到 APP 风格**——克制、留白、深绿色主调的卡片式设计。
+本规范以 v3 原型（`docs/product/prototypes/android-app-prototype-v3.html`）为准，整体采用**得到 APP 风格**——克制、留白、深绿色主调的卡片式设计。
 
 #### 7.5.1 色彩体系
 
@@ -1141,5 +1141,5 @@ ingress:
 ---
 
 **文档状态**：初步定稿——设计文档与 v3 原型已对齐  
-**原型文件**：`prototypes/android-app-prototype-v3.html`  
+**原型文件**：`docs/product/prototypes/android-app-prototype-v3.html`
 **下一步**：评审视觉规范与交互细节，确认后进入阶段 0 实施

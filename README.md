@@ -133,7 +133,7 @@ data/          本地数据库、音频、转写和摘要数据
 models/        FunASR 离线模型缓存
 logs/          后端和前端运行日志
 scripts/       辅助脚本
-docs/          补充文档
+docs/          部署方案、产品规划、ADR、排错和便携包说明
 ```
 
 产品版本规划放在：
@@ -143,6 +143,7 @@ docs/product/
 ```
 
 当前 3.0 迭代资料见 [docs/product/versions/3.0/README.md](docs/product/versions/3.0/README.md)。
+部署方案见 [docs/deployment-plan.md](docs/deployment-plan.md)，原型文件放在 [docs/product/prototypes/](docs/product/prototypes/)。
 
 ## 常用命令
 
@@ -152,6 +153,8 @@ docs/product/
 .\stop-all.ps1       # 停止服务
 .\check.ps1          # 检查依赖、端口、配置和服务状态
 ```
+
+`setup.ps1` 会优先使用 Python 3.12、3.11 或 3.10 创建后端虚拟环境；如果系统只有 Python 3.13/3.14，请先安装受支持版本。
 
 后端最小测试：
 
