@@ -30,7 +30,7 @@
 
 AI Recorder 是一个面向 Windows 个人用户的录音整理工具，核心链路为：音频导入 → ffmpeg 格式归一化 → FunASR 离线转写 → 云端 LLM 摘要 → 前端展示与导出。现有系统采用模块化单体架构（FastAPI + SQLite + React/Vite），在用户 PC 上本地运行。
 
-本产品旨在为 AI Recorder 提供 Android 移动端远程访问能力。采用 **PC 后端留守 + Cloudflare Tunnel 内网穿透 + Android 远程客户端** 的技术方案，使用户在离开家庭局域网后仍能通过手机录音、上传、查看转写和摘要。
+本产品旨在为 AI Recorder 提供 Android 移动端远程访问能力。采用 **PC 后端留守 + Cloudflare Tunnel 内网穿透 + Android 远程客户端** 的技术方案，使用户在离开家庭局域网后仍能通过手机上传音频、查看转写和摘要。
 
 ### 1.2 产品定义
 
@@ -68,8 +68,7 @@ AI Recorder Android 客户端是一个**远程管理客户端**，支持从手�
 - Android 端为**远程管理客户端**——App 内不提供实时录音功能，但支持从手机文件系统选取音频文件上传至 PC 端
 - 音频处理全部在 PC 端完成，Android 端通过隧道远程浏览管理及文件上传
 - 通信协议为 **HTTPS**，认证方式为共享 **API Token**
-- **PWA 作为快速验证方案**——改造现有 React 前端指向隧道域名，Android Chrome 打开即可用
-- **原生客户端作为长期目标**——Kotlin Compose 方案，提供原生移动体验
+- **原生 Android 客户端作为唯一移动端形态**——Kotlin Compose 方案，提供原生移动体验
 
 ### 1.4 产品边界
 
@@ -82,7 +81,6 @@ AI Recorder Android 客户端是一个**远程管理客户端**，支持从手�
 | 删除录音（级联删除） | 实时语音转文字 |
 | 服务器配置（地址 + Token） | 离线数据缓存 |
 | 系统健康监控面板 | 本地音频存储 |
-| PWA 快速体验版 | 多用户账号体系 |
 | API Token 基础认证 | — |
 | 深色模式 / 系统主题跟随 | — |
 
@@ -97,7 +95,7 @@ AI Recorder Android 客户端是一个**远程管理客户端**，支持从手�
 | 远程转写可达 | 随时随地查看 PC 上的转写和摘要结果 | 4G 网络下打开 App 到看到转写结果 < 5 秒 |
 | 数据本地化 | 音频和转写始终在用户 PC | Android 端不持久化任何音频或转写内容 |
 | 开箱即用 | 首次配置不超过 3 分钟 | 用户 10 分钟内完成隧道搭建 + App 登录 |
-| PWA 快速体验 | 扫码即用 | 4G 下冷启动 < 3 秒 |
+| 原生客户端 MVP | 安装后即用 | 4G 下冷启动 < 3 秒 |
 
 ### 2.2 成功指标
 
@@ -105,7 +103,7 @@ AI Recorder Android 客户端是一个**远程管理客户端**，支持从手�
 |------|--------|---------|
 | 服务器可达率 | ≥ 99% | 客户端 `/health` 探测成功率 |
 | 列表加载速度（WiFi） | 100 条录音 < 2 秒 | 客户端请求耗时打点 |
-| PWA 冷启动时间（4G） | < 3 秒 | Lighthouse / Web Vitals |
+| Android 冷启动时间（4G） | < 3 秒 | 实机启动耗时 |
 | 24 小时空闲后唤醒延迟 | < 5 秒 | 用户测试 |
 | 详情页打开耗时 | < 1 秒 | 转写/摘要接口耗时打点 |
 | 认证错误率 | < 1 次/100 次会话 | 后端 403 错误日志 |
@@ -247,7 +245,7 @@ AI Recorder Android 客户端是一个**远程管理客户端**，支持从手�
 |------|------|
 | 字段 | 服务器地址（如 `https://recorder.yourdomain.com`）、API Token |
 | 验证 | "测试连接"按钮 → `GET /health`，显示延迟和连接状态 |
-| 存储 | `EncryptedSharedPreferences`（Android 原生）或 `AsyncStorage`（RN/PWA） |
+| 存储 | `EncryptedSharedPreferences` |
 | 默认值 | 预填初始配置，可随时修改 |
 
 **F2.2 LLM 设置（P1）**
@@ -342,7 +340,7 @@ AI Recorder Android 客户端是一个**远程管理客户端**，支持从手�
 | 文件上传速度（WiFi）| > 2 MB/s（10 MB 文件 < 5 秒） | 传输速率打点 |
 | 文件上传速度（4G）| > 0.5 MB/s | 传输速率打点 |
 | APK 大小（原生版）| < 10 MB | 构建产物检查 |
-| PWA 总缓存大小 | < 2 MB | Lighthouse |
+| 本地缓存大小 | < 2 MB | Android 存储统计 |
 
 ### 5.2 可靠性
 
@@ -1002,31 +1000,29 @@ App 核心导航采用**底栏常驻 3-Tab 结构**：
 
 **里程碑 M0**：后端可通过 4G 蜂窝网络访问，Token 认证生效。
 
-### 阶段 1：PWA 快速体验版（第 2–3 天）
+### 阶段 1：Android 客户端 MVP（第 2–3 周）
 
-**目标**：改造现有 React 前端，Android Chrome 打开即可用，无需录音功能。
-
-| 任务 | 预估 | 交付物 |
-|------|------|--------|
-| 修改 `api.ts` 指向隧道域名 + Token | 1h | API 调用正常 |
-| 添加 `manifest.json` 和 Service Worker | 2h | "添加到主屏幕"可用 |
-| 移动端响应式布局适配 | 3h | 所有页面在 360dp 宽度可用 |
-| 移除前端录音相关 UI（原 PC 端无此功能，仅做布局适配） | 1h | 界面简洁无冗余 |
-| 4G 环境实机测试 | 1h | 浏览转写、导出全流程可用 |
-
-**里程碑 M1**：PWA 安装到 Android 主屏幕，远程浏览和查看转写可用。
-
-### 阶段 2：原生 Android 客户端 MVP（第 2–3 周）
-
-**目标**：交付原生 Android 体验，功能对齐 PWA 端。
+**目标**：交付原生 Android 远程管理体验，无需手机端录音功能。
 
 | 任务 | 预估 | 交付物 |
 |------|------|--------|
 | 项目脚手架（Kotlin/Compose + Hilt + Retrofit） | 4h | 可编译的空 App |
-| 定义 API 服务接口（Retrofit，含上传端点） | 2h | 全部端点类型化 |
-| AuthInterceptor + SettingsDataStore | 2h | Token 管理 |
-| LibraryScreen + DetailScreen（列表 + 详情） | 10h | 列表、筛选、转写/摘要查看 |
-| UploadSheet + UploadViewModel（上传队列 + 进度） | 8h | 文件选取、队列管理、进度显示、错误处理 |
+| 安全保存服务器地址 + Token | 2h | EncryptedSharedPreferences 可用 |
+| 录音列表 / 详情接口接入 | 4h | 远程浏览和查看转写可用 |
+| 手机文件上传 | 3h | 音频可上传到 PC 录音库 |
+| 4G 环境实机测试 | 1h | 浏览、上传、导出全流程可用 |
+
+**里程碑 M1**：原生 Android 客户端可远程浏览、上传和查看转写。
+
+### 阶段 2：Android 体验完善（第 3–4 周）
+
+**目标**：完善原生 Android 体验，补齐批量操作、导出和状态诊断。
+
+| 任务 | 预估 | 交付物 |
+|------|------|--------|
+| 高级筛选与批量操作 | 6h | 多选、批量转写、批量摘要、批量删除 |
+| 上传队列增强 | 5h | 断点提示、失败重试、进度恢复 |
+| LibraryScreen + DetailScreen 体验优化 | 6h | 列表、筛选、转写/摘要查看更顺手 |
 | SettingsScreen + HealthScreen | 6h | 服务器配置、LLM 只读、健康面板 |
 | Markdown 渲染 | 3h | 摘要模板正确显示 |
 | StatusBanner（PC 离线警告） | 2h | 常驻连通性指示 |
@@ -1081,7 +1077,6 @@ Android 客户端存储主备两个服务器地址，通过设置页切换。
 | AI Recorder | Windows 端录音管理工具，包含 FastAPI 后端 + React 前端 |
 | AI Recorder Android | 本文档定义的移动端远程客户端 |
 | Cloudflare Tunnel | 又称 cloudflared 或 Argo Tunnel——将本地服务通过 Cloudflare 边缘网络暴露到公网的反向代理 |
-| PWA | Progressive Web App——可安装到手机主屏幕、支持离线能力的 Web 应用 |
 | ASR | 自动语音识别——本项目使用 FunASR 的 Paraformer-zh 模型 |
 | LLM | 大语言模型——DeepSeek / 通义千问 / MiMo，用于生成摘要 |
 | API Token | 32 位以上的共享密钥，用于 Android 客户端与 PC 后端之间的认证 |

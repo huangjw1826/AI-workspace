@@ -16,6 +16,7 @@ AI Recorder 是一个面向 Windows 本机使用的录音整理工具。它把�
 - 录音库管理：支持内容搜索、标签维护、多选、批量转写、批量摘要和批量删除。
 - 导出：转写可下载为 Markdown、TXT、JSON、SRT、DOCX；摘要可下载为 Markdown、TXT、DOCX。
 - 目录监控：定时扫描录音目录，新音频自动入库。
+- Android 远程访问：原生 Android 客户端通过公网域名和 API Token 访问 PC 端录音库。
 
 ## 克隆后快速开始
 
@@ -38,7 +39,7 @@ cd AI-workspace
 启动成功后打开：
 
 ```text
-http://127.0.0.1:5173
+http://127.0.0.1:8000
 ```
 
 使用结束后停止服务：
@@ -55,7 +56,7 @@ http://127.0.0.1:5173
 
 ## 首次使用流程
 
-1. 打开 `http://127.0.0.1:5173`。
+1. 打开 `http://127.0.0.1:8000`。
 2. 进入“设置”，确认录音保存目录、转写保存目录和摘要保存目录。
 3. 如果需要摘要，配置大模型服务商和 API Key。
 4. 在“录音库”上传音频，或在“目录监控”里配置要扫描的录音目录。
@@ -79,6 +80,7 @@ backend/.env
 常用配置项：
 
 ```env
+API_TOKEN=
 LLM_PROVIDER=deepseek
 LLM_API_KEY=your_api_key_here
 LLM_MODEL=
@@ -144,6 +146,8 @@ docs/product/
 
 当前 3.0 迭代资料见 [docs/product/versions/3.0/README.md](docs/product/versions/3.0/README.md)。
 部署方案见 [docs/deployment-plan.md](docs/deployment-plan.md)，原型文件放在 [docs/product/prototypes/](docs/product/prototypes/)。
+Android 远程访问阶段 0 配置见 [docs/android-remote-access.md](docs/android-remote-access.md)。
+阿里云域名 + 动态 IPv6 直连也记录在同一文档中，默认子域名为 `recorder.weizziwong.top`。
 
 ## 常用命令
 
@@ -152,6 +156,7 @@ docs/product/
 .\start-all.ps1      # 启动后端和网页服务
 .\stop-all.ps1       # 停止服务
 .\check.ps1          # 检查依赖、端口、配置和服务状态
+.\scripts\check-remote-access.ps1 -BaseUrl http://127.0.0.1:8000 -Token "你的API_TOKEN"
 ```
 
 `setup.ps1` 会优先使用 Python 3.12、3.11 或 3.10 创建后端虚拟环境；如果系统只有 Python 3.13/3.14，请先安装受支持版本。
@@ -160,7 +165,7 @@ docs/product/
 
 ```powershell
 cd backend
-.\.venv\Scripts\python.exe -m unittest tests.test_task_service tests.test_recording_audio tests.test_recording_management
+.\.venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
 ## 故障排查
@@ -174,7 +179,7 @@ cd backend
 常见处理方式：
 
 - `python`、`node`、`npm` 或 `ffmpeg` 找不到：重新安装对应工具，并确认它们已经加入系统 PATH。
-- 页面打不开：确认访问的是 `http://127.0.0.1:5173`，不是 `https`。
+- 页面打不开：确认访问的是 `http://127.0.0.1:8000`，不是 `https`。
 - 端口被占用：先运行 `.\stop-all.ps1`，再运行 `.\start-all.ps1`。
 - 摘要不可用：检查网页设置里的 API Key，转写本身不需要 API Key。
 - 首次转写慢：FunASR 模型可能正在下载或初始化。

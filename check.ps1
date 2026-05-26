@@ -78,7 +78,7 @@ Write-Host "AI Recorder project check"
 Write-Host "Workspace: $Root"
 Write-Host ""
 
-if (Test-Path -LiteralPath $BackendPython) {
+if ((Test-Path -LiteralPath $BackendPython) -and (Test-CommandRuns $BackendPython @("--version"))) {
     $pythonVersion = & $BackendPython --version 2>$null
     Write-Status "OK" "Backend Python is available: $pythonVersion"
 }
@@ -167,17 +167,10 @@ else {
 }
 
 if (Test-PortOpen 8000) {
-    Write-Status "OK" "Backend port 8000 is listening"
+    Write-Status "OK" "App port 8000 is listening"
 }
 else {
-    Write-Status "WARN" "Backend port 8000 is not listening; service may be stopped"
-}
-
-if (Test-PortOpen 5173) {
-    Write-Status "OK" "Frontend port 5173 is listening"
-}
-else {
-    Write-Status "WARN" "Frontend port 5173 is not listening; service may be stopped"
+    Write-Status "WARN" "App port 8000 is not listening; service may be stopped"
 }
 
 try {
@@ -186,6 +179,16 @@ try {
 }
 catch {
     Write-Status "WARN" "Backend health check is unreachable. Run .\start-all.ps1 when you want to use the app"
+}
+
+try {
+    $app = Invoke-WebRequest -Uri "http://127.0.0.1:8000/" -UseBasicParsing -TimeoutSec 3
+    if ($app.StatusCode -ge 200 -and $app.StatusCode -lt 500) {
+        Write-Status "OK" "Frontend shell is served by backend: http://127.0.0.1:8000"
+    }
+}
+catch {
+    Write-Status "WARN" "Frontend shell is unreachable. Run .\start-all.ps1 after building frontend/dist"
 }
 
 Write-Host ""

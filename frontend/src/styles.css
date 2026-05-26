@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --bg: #f5f8fc;
   --surface: #ffffff;
   --surface-soft: #f8fbff;
@@ -434,7 +434,7 @@ button {
 
 .toolbar-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(118px, 150px) auto auto;
+  grid-template-columns: minmax(200px, 1fr) minmax(140px, 180px) minmax(118px, 150px) auto auto;
   gap: 10px;
   align-items: center;
 }
@@ -462,6 +462,26 @@ button {
   background: #ffffff;
   color: var(--text);
   padding: 0 9px;
+}
+
+.folder-picker {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.folder-picker-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.folder-picker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .searchbox input {
@@ -534,18 +554,23 @@ button {
 
 .file-cell {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-weight: 650;
 }
 
+.file-cell > svg {
+  flex-shrink: 0;
+}
+
 .file-cell span {
+  flex: 1;
+  min-width: 60px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 mark {
@@ -1381,6 +1406,28 @@ progress {
   }
 }
 
+.match-snippets {
+  width: 100%;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.match-snippet {
+  font-size: 12px;
+  font-weight: 400;
+  color: #5b7a3a;
+  background: #f0f7e4;
+  padding: 2px 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
 @media (max-width: 1180px) {
   .library-layout {
     grid-template-columns: 1fr;
@@ -1391,6 +1438,30 @@ progress {
     max-height: calc(100vh - 24px);
   }
 }
+
+@media (max-width: 960px) {
+  .toolbar-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .toolbar-row .searchbox {
+    grid-column: span 1;
+  }
+
+  .toolbar-row button,
+  .toolbar-row select {
+    grid-column: span 1;
+  }
+
+  .table-head,
+  .table-row {
+    grid-template-columns: 26px minmax(140px, 1fr) 82px 72px 66px 60px 110px 32px;
+    gap: 6px;
+    padding: 8px 6px;
+    min-width: 600px;
+  }
+}
+
 
 @media (max-width: 820px) {
   .nav {

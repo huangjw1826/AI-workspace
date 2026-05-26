@@ -10,6 +10,7 @@
 | `deployment-plan.md` | Windows 本地部署边界、运行时版本和技术栈方案。 |
 | `AI-Recorder-产品设计文档.md` | AI Recorder 产品设计资料。 |
 | `android-app-prd.md` | Android 版本产品需求文档。 |
+| `android-remote-access.md` | Android 远程访问阶段 0 配置和验证说明。 |
 | `cloud-llm-providers.md` | 云端大模型供应商配置说明。 |
 | `portable.md` | Windows 便携包打包和使用说明。 |
 | `troubleshooting.md` | 常见故障排查。 |

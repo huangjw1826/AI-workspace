@@ -3,6 +3,7 @@ export type DetailTab = "transcript" | "summary" | "info";
 export type SortKey = "created_desc" | "created_asc" | "duration_desc" | "size_desc";
 
 export type LibraryFilters = {
+  tag: string;
   query: string;
   statuses: string[];
   sources: string[];

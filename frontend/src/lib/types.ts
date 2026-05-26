@@ -145,3 +145,8 @@ export interface SummaryTemplate {
 }
 
 export type ExportFormat = "md" | "txt" | "json" | "srt" | "docx";
+
+export interface SearchResult {
+  recordings: Recording[];
+  match_previews: Record<string, string[]>;
+}

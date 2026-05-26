@@ -5,6 +5,8 @@ $LogDir = "$Root\logs"
 $PidFiles = @(
     "$LogDir\backend.pid",
     "$LogDir\frontend.pid",
+    "$LogDir\cloudflared.pid",
+    "$LogDir\caddy.pid",
     "$LogDir\model-download.pid",
     "$LogDir\rerun-transcribe-task.pid"
 )

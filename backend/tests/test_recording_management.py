@@ -1,6 +1,7 @@
-import json
+﻿import json
 import tempfile
 import unittest
+from asyncio import run
 from pathlib import Path
 
 from sqlalchemy.pool import StaticPool
@@ -12,6 +13,7 @@ from app.api.recordings import (
     TranscriptSegmentUpdate,
     export_transcript,
     list_recordings,
+    upload_recording,
     update_recording_tags,
     update_transcript_segment,
 )
@@ -28,8 +30,29 @@ def create_test_engine():
 
 class FakeSettings:
     def __init__(self, root: Path) -> None:
+        self.resolved_data_dir = root / "data"
         self.resolved_transcript_dir = root / "transcripts"
+        self.resolved_watch_dir = root / "library"
+        self.resolved_data_dir.mkdir(parents=True, exist_ok=True)
+        (self.resolved_data_dir / "recordings").mkdir(parents=True, exist_ok=True)
         self.resolved_transcript_dir.mkdir(parents=True, exist_ok=True)
+        self.resolved_watch_dir.mkdir(parents=True, exist_ok=True)
+
+
+class FakeUploadFile:
+    def __init__(self, filename: str, content: bytes) -> None:
+        self.filename = filename
+        self.content = content
+        self.offset = 0
+        self.read_sizes: list[int] = []
+
+    async def read(self, size: int = -1) -> bytes:
+        self.read_sizes.append(size)
+        if size == -1:
+            size = len(self.content) - self.offset
+        chunk = self.content[self.offset : self.offset + size]
+        self.offset += len(chunk)
+        return chunk
 
 
 class RecordingManagementTest(unittest.TestCase):
@@ -103,9 +126,12 @@ class RecordingManagementTest(unittest.TestCase):
         with Session(self.engine) as session:
             self.seed_recording(session)
 
-            self.assertEqual([item.id for item in list_recordings(query="old transcript", session=session)], ["rec-1"])
-            self.assertEqual([item.id for item in list_recordings(query="budget", session=session)], ["rec-1"])
-            self.assertEqual([item.id for item in list_recordings(tag="planning", session=session)], ["rec-1"])
+            result = list_recordings(query="old transcript", session=session)
+            self.assertEqual([item.id for item in result.recordings], ["rec-1"])
+            result = list_recordings(query="budget", session=session)
+            self.assertEqual([item.id for item in result.recordings], ["rec-1"])
+            result = list_recordings(tag="planning", session=session)
+            self.assertEqual([item.id for item in result.recordings], ["rec-1"])
 
     def test_update_tags_normalizes_values(self) -> None:
         with Session(self.engine) as session:
@@ -128,6 +154,19 @@ class RecordingManagementTest(unittest.TestCase):
 
             self.assertIn(b"old transcript", json_response.body)
             self.assertIn(b"00:00:01,250 --> 00:00:03,500", srt_response.body)
+
+    def test_upload_recording_reads_file_in_chunks(self) -> None:
+        original_chunk_size = recordings_api.STREAM_CHUNK_SIZE
+        recordings_api.STREAM_CHUNK_SIZE = 3
+        self.addCleanup(lambda: setattr(recordings_api, "STREAM_CHUNK_SIZE", original_chunk_size))
+        upload = FakeUploadFile("meeting.mp3", b"0123456789")
+
+        with Session(self.engine) as session:
+            recording = run(upload_recording(upload, session=session))
+
+            self.assertEqual(recording.filename, "meeting.mp3")
+            self.assertEqual(recording.file_size_bytes, 10)
+            self.assertEqual(upload.read_sizes, [3, 3, 3, 3, 3])
 
 
 if __name__ == "__main__":

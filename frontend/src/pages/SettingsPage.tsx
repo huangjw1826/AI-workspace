@@ -1,7 +1,13 @@
 import React from "react";
 import { HardDrive, Settings } from "lucide-react";
+import { FolderPicker } from "../components/ui/FolderPicker";
 import { SettingsSection } from "../components/ui/SettingsSection";
-import type { LlmConnectivityResult, LlmSettings, LlmSettingsUpdate, StorageSettings } from "../lib/types";
+import type {
+  LlmConnectivityResult,
+  LlmSettings,
+  LlmSettingsUpdate,
+  StorageSettings,
+} from "../lib/types";
 
 type StorageDraft = Pick<StorageSettings, "transcript_dir" | "summary_dir">;
 
@@ -37,16 +43,20 @@ export function SettingsPage({
       <SettingsSection title="保存位置" icon={<HardDrive size={17} />}>
         <label>
           <span>转写保存目录</span>
-          <input
+          <FolderPicker
             value={storageDraft.transcript_dir}
-            onChange={(event) => setStorageDraft((draft) => ({ ...draft, transcript_dir: event.target.value }))}
+            onChange={(path) => setStorageDraft((draft) => ({ ...draft, transcript_dir: path }))}
+            placeholder="点击右侧选择按钮选择文件夹"
+            disabled={settingsBusy}
           />
         </label>
         <label>
           <span>摘要保存目录</span>
-          <input
+          <FolderPicker
             value={storageDraft.summary_dir}
-            onChange={(event) => setStorageDraft((draft) => ({ ...draft, summary_dir: event.target.value }))}
+            onChange={(path) => setStorageDraft((draft) => ({ ...draft, summary_dir: path }))}
+            placeholder="点击右侧选择按钮选择文件夹"
+            disabled={settingsBusy}
           />
         </label>
         <div className="button-row">

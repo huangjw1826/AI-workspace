@@ -46,7 +46,7 @@
 - 前端设置入口：已新增 LLM 设置面板，可选择 `mimo`、`deepseek`、`tongyi`、`qwen`，输入 API Key，保存配置并测试连通性。
 - 环境检测：侧栏健康状态已新增 LLM provider、模型、API Key 配置状态和连通性测试结果。
 - 后端设置接口：已新增 `GET /api/settings/llm`、`PUT /api/settings/llm`、`POST /api/settings/llm/test`，FastAPI TestClient 验证通过。
-- 前端页面：`http://127.0.0.1:5173/` 返回 HTTP 200
+- 前端页面：`http://127.0.0.1:8000/` 返回 HTTP 200
 - 前端构建：`npm run build` 成功
 
 ## 当前限制

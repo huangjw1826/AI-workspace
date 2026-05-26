@@ -154,7 +154,7 @@ AI Recorder Portable
 
 How to use:
 1. Double-click start-ai-recorder.bat
-2. The browser should open automatically at http://127.0.0.1:5173
+2. The browser should open automatically at http://127.0.0.1:8000
 3. Double-click stop-ai-recorder.bat when you are done
 
 Useful files:

@@ -23,10 +23,16 @@ router = APIRouter(prefix="/api/recordings", tags=["recordings"])
 # 单个上传文件最大 500 MB
 MAX_UPLOAD_SIZE = 500 * 1024 * 1024
 STREAM_CHUNK_SIZE = 1024 * 1024
+MATCH_SNIPPET_LENGTH = 80
 
 
 class RecordingTagsUpdate(BaseModel):
     tags: list[str] = Field(default_factory=list, max_length=20)
+
+
+class SearchResult(BaseModel):
+    recordings: list[Recording] = Field(default_factory=list)
+    match_previews: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class TranscriptSegmentUpdate(BaseModel):
@@ -89,7 +95,7 @@ def list_recordings(
     query: str = Query("", max_length=120),
     tag: str = Query("", max_length=40),
     session: Session = Depends(get_session),
-) -> list[Recording]:
+) -> SearchResult:
     if not isinstance(query, str):
         query = ""
     if not isinstance(tag, str):
@@ -98,7 +104,7 @@ def list_recordings(
     normalized_query = query.strip().lower()
     normalized_tag = tag.strip().lower()
     if not normalized_query and not normalized_tag:
-        return recordings
+        return SearchResult(recordings=list(recordings), match_previews={})
 
     segments_by_recording: dict[str, list[str]] = {}
     summaries_by_recording: dict[str, list[str]] = {}
@@ -109,25 +115,42 @@ def list_recordings(
             summaries_by_recording.setdefault(summary.recording_id, []).append(summary.content)
 
     matched: list[Recording] = []
+    match_previews: dict[str, list[str]] = {}
     for recording in recordings:
         tags = [item.strip().lower() for item in recording.tags.split(",") if item.strip()]
         if normalized_tag and normalized_tag not in tags:
             continue
         if normalized_query:
-            searchable = "\n".join(
-                [
-                    recording.filename,
-                    recording.source_path or "",
-                    recording.content_hash or "",
-                    recording.tags,
-                    *segments_by_recording.get(recording.id, []),
-                    *summaries_by_recording.get(recording.id, []),
-                ]
-            ).lower()
+            searchable_fields: list[tuple[str, str]] = [
+                ("filename", recording.filename),
+                ("tags", recording.tags),
+            ]
+            for text in segments_by_recording.get(recording.id, []):
+                searchable_fields.append(("transcript", text))
+            for text in summaries_by_recording.get(recording.id, []):
+                searchable_fields.append(("summary", text))
+            searchable = "\n".join(v for _, v in searchable_fields).lower()
             if normalized_query not in searchable:
                 continue
+
+            previews: list[str] = []
+            for field_name, text in searchable_fields:
+                lower_text = text.lower()
+                pos = lower_text.find(normalized_query)
+                if pos >= 0:
+                    start = max(0, pos - MATCH_SNIPPET_LENGTH)
+                    end = min(len(text), pos + len(normalized_query) + MATCH_SNIPPET_LENGTH)
+                    snippet = text[start:end].strip()
+                    if start > 0:
+                        snippet = "..." + snippet
+                    if end < len(text):
+                        snippet = snippet + "..."
+                    previews.append(f"[{field_name}] {snippet}")
+            if previews:
+                match_previews[recording.id] = previews[:5]
+
         matched.append(recording)
-    return matched
+    return SearchResult(recordings=matched, match_previews=match_previews)
 
 
 @router.post("")
@@ -140,26 +163,39 @@ async def upload_recording(
     if suffix not in {"wav", "mp3", "m4a", "flac", "aac", "ogg"}:
         raise HTTPException(status_code=400, detail="不支持的音频格式，请上传 wav、mp3、m4a、flac、aac 或 ogg 文件")
 
-    # 读取并检查文件大小
-    content = await file.read()
-    if len(content) > MAX_UPLOAD_SIZE:
-        raise HTTPException(status_code=413, detail=f"文件过大，最大支持 {MAX_UPLOAD_SIZE // (1024 * 1024)} MB")
-
     library_dir = _recording_library_dir()
     temp_path = settings.resolved_data_dir / "recordings" / f".upload-{uuid4().hex}.tmp"
-    temp_path.write_bytes(content)
-    digest = content_hash(temp_path)
-    existing = session.exec(select(Recording).where(Recording.content_hash == digest)).first()
-    if existing is not None:
+    temp_path.parent.mkdir(parents=True, exist_ok=True)
+    bytes_written = 0
+    try:
+        with temp_path.open("wb") as output:
+            while True:
+                chunk = await file.read(STREAM_CHUNK_SIZE)
+                if not chunk:
+                    break
+                bytes_written += len(chunk)
+                if bytes_written > MAX_UPLOAD_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"文件过大，最大支持 {MAX_UPLOAD_SIZE // (1024 * 1024)} MB",
+                    )
+                output.write(chunk)
+
+        digest = content_hash(temp_path)
+        existing = session.exec(select(Recording).where(Recording.content_hash == digest)).first()
+        if existing is not None:
+            temp_path.unlink(missing_ok=True)
+            return existing
+    except Exception:
         temp_path.unlink(missing_ok=True)
-        return existing
+        raise
 
     recording = Recording(
         filename=file.filename or "recording",
         original_path="",
         format=suffix,
         content_hash=digest,
-        file_size_bytes=len(content),
+        file_size_bytes=bytes_written,
         source_type="upload",
         source_path="",
     )

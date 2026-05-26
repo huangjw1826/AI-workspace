@@ -1,5 +1,6 @@
 import React from "react";
 import { FolderSearch } from "lucide-react";
+import { FolderPicker } from "../components/ui/FolderPicker";
 import { SettingsSection } from "../components/ui/SettingsSection";
 import type { WatchEvent, WatchSettings } from "../lib/types";
 
@@ -33,9 +34,11 @@ export function WatchPage({
         </label>
         <label>
           <span>录音目录路径</span>
-          <input
+          <FolderPicker
             value={watchDraft.watch_dir}
-            onChange={(event) => setWatchDraft((draft) => ({ ...draft, watch_dir: event.target.value }))}
+            onChange={(path) => setWatchDraft((draft) => ({ ...draft, watch_dir: path }))}
+            placeholder="点击右侧选择按钮选择文件夹"
+            disabled={settingsBusy}
           />
         </label>
         <div className="form-grid">

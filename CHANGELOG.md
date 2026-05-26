@@ -1,5 +1,71 @@
 # AI Recorder 更改日志
 
+## 2026-05-27 项目结构文档化
+
+本次改动完善项目文档结构，为 PC 端和 Android 端分别创建详细的结构说明文档，便于后续开发和维护。
+
+### Added
+- 新增 `PROJECT_STRUCTURE.md` 整体项目结构说明文档
+- 新增 `backend/PROJECT_STRUCTURE.md` 后端详细结构文档
+- 新增 `frontend/PROJECT_STRUCTURE.md` 前端详细结构文档
+- 新增 `android/PROJECT_STRUCTURE.md` Android 端详细结构文档
+- 新增 `docs/TECH_STACK.md` 统一技术栈说明文档
+
+### Changed
+- 更新 `README.md` 项目说明
+
+---
+
+## 2026-05-26 Android-only remote access hardening
+
+本次改动将远程访问范围收敛到原生 Android 客户端，移除网页端 PWA/远程连接配置，并统一本机网页入口为后端托管的单端口模式。
+
+### Changed
+- 本机网页入口统一为 `http://127.0.0.1:8000`，由 FastAPI 托管 `frontend/dist`
+- `start-all.ps1` 不再额外启动 5173 静态文件服务
+- 远程访问文档改为 Android-only，不再描述 PWA 快速体验路径
+
+### Fixed
+- 修复 API Token 测试引用旧中间件类名导致的后端单测失败
+- 收紧远程鉴权判断，避免反向代理回环地址绕过 `/api/*` token 校验
+- `/api/pick-folder` 限制为本机请求，避免远程 Android 触发 PC 原生文件夹弹窗
+- `check.ps1` 改为实际执行后端 Python 后再报告可用
+
+### Removed
+- 移除前端 PWA manifest、Service Worker 和网页端远程连接配置
+
+### Verified
+- 后端测试：23 tests OK
+- 后端编译：`python -m compileall app tests` 通过
+- 前端类型检查：`npx tsc --noEmit` 通过
+- 前端构建：`npm run build` 通过
+
+---
+
+## 2026-05-25 3.0 Phase 2 体验补齐
+
+本次改动修复 3.0 发布验收清单中两项遗留问题：标签筛选 + 搜索命中展示。
+
+### Changed
+- `/api/recordings` 返回值从 `list[Recording]` → `SearchResult`，新增 `match_previews` 字段
+- 搜索匹配时收集文件名、标签、转写文本、摘要内容的命中上下文（最多 5 条片段，80 字符窗口）
+- `LibraryFilters` 新增 `tag` 字段
+- 前端 `listRecordings()` 返回值适配 `SearchResult`，新增 `reloadRecordings()` 辅助函数
+
+### Added
+- 列表页新增标签筛选输入框
+- 搜索结果命中上下文展示（绿色标签样式，带字段标识）
+- `clearAppliedTag()` 函数，标签筛选芯片可清除
+
+### Fixed
+- 更新测试适配 `SearchResult` 返回值
+
+### Verified
+- 后端测试：13 tests OK
+- 前端构建：通过
+
+---
+
 ## 2026-05-23 3.0 Phase 0
 
 本次改动启动 3.0 迭代，聚焦任务可靠性地基。

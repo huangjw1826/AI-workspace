@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckSquare, Clock3, Database, FileAudio, Filter, Search, Sparkles, Trash2, TrendingUp } from "lucide-react";
+import { CheckSquare, Clock3, Database, FileAudio, Filter, Search, Sparkles, Tag, Trash2, TrendingUp } from "lucide-react";
 import { MetricCard } from "../components/recording/MetricCard";
 import { RecordingDetailPanel } from "../components/recording/RecordingDetailPanel";
 import { StatusBadge } from "../components/ui/StatusBadge";
@@ -44,8 +44,10 @@ export function LibraryPage({
   applyFilters,
   resetFilters,
   clearAppliedQuery,
+  clearAppliedTag,
   clearAppliedStatus,
   clearAppliedSource,
+  searchMatchPreviews,
   selectRecording,
   handleDelete,
   runTranscription,
@@ -80,8 +82,10 @@ export function LibraryPage({
   applyFilters: () => void;
   resetFilters: () => void;
   clearAppliedQuery: () => void;
+  clearAppliedTag: () => void;
   clearAppliedStatus: (status: string) => void;
   clearAppliedSource: (source: string) => void;
+  searchMatchPreviews: Record<string, string[]>;
   selectRecording: (id: string) => void;
   handleDelete: (recordingId: string, event: React.MouseEvent) => void;
   runTranscription: () => void;
@@ -107,7 +111,7 @@ export function LibraryPage({
   };
   const completionRate = stats.total > 0 ? clampPercent((stats.completed / stats.total) * 100) : 0;
   const draftFilterCount =
-    (draftFilters.query.trim() ? 1 : 0) + draftFilters.statuses.length + draftFilters.sources.length;
+    (draftFilters.query.trim() ? 1 : 0) + (draftFilters.tag.trim() ? 1 : 0) + draftFilters.statuses.length + draftFilters.sources.length;
   const visibleIds = filteredRecordings.map((recording) => recording.id);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
 
@@ -170,6 +174,17 @@ export function LibraryPage({
                   }}
                 />
               </label>
+              <label className="searchbox">
+                <Tag size={16} />
+                <input
+                  value={draftFilters.tag}
+                  placeholder="标签筛选"
+                  onChange={(event) => setDraftFilters((draft) => ({ ...draft, tag: event.target.value }))}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") applyFilters();
+                  }}
+                />
+              </label>
               <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
                 <option value="created_desc">最新优先</option>
                 <option value="created_asc">最旧优先</option>
@@ -223,6 +238,7 @@ export function LibraryPage({
             <span>显示 {filteredRecordings.length} / {recordings.length} 条录音</span>
             <div className="active-filters">
               {appliedFilters.query.trim() && <button onClick={clearAppliedQuery}>关键词：{appliedFilters.query} x</button>}
+              {appliedFilters.tag.trim() && <button onClick={clearAppliedTag}>标签：{appliedFilters.tag} x</button>}
               {appliedFilters.statuses.map((status) => (
                 <button key={status} onClick={() => clearAppliedStatus(status)}>状态：{statusLabel(status)} x</button>
               ))}
@@ -280,7 +296,16 @@ export function LibraryPage({
                     aria-label={`选择 ${recording.filename}`}
                   />
                 </span>
-                <span className="file-cell"><FileAudio size={16} /> <span>{recording.filename}</span></span>
+                <span className="file-cell">
+                  <FileAudio size={16} /> <span>{recording.filename}</span>
+                  {searchMatchPreviews[recording.id]?.length > 0 && appliedFilters.query.trim() && (
+                    <div className="match-snippets">
+                      {searchMatchPreviews[recording.id].map((snippet, i) => (
+                        <div key={i} className="match-snippet" title={snippet}>{snippet}</div>
+                      ))}
+                    </div>
+                  )}
+                </span>
                 <span><StatusBadge status={recording.status} /></span>
                 <span>{formatSize(recording.file_size_bytes)}</span>
                 <span>{formatDuration(recording.duration_seconds)}</span>

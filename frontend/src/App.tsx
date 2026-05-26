@@ -3,11 +3,11 @@ import { ConfirmDialog, type ConfirmDialogState } from "./components/feedback/Co
 import { ToastStack, type ToastMessage } from "./components/feedback/ToastStack";
 import { NavBar } from "./components/layout/NavBar";
 import {
-  apiUrl,
   cancelTask,
   deleteRecording,
   deleteRecordingsBatch,
   deleteSummary,
+  downloadFile,
   getHealth,
   getLlmSettings,
   getRecording,
@@ -53,6 +53,7 @@ const EMPTY_FILTERS: LibraryFilters = {
   query: "",
   statuses: [],
   sources: [],
+  tag: "",
 };
 
 const VIEW_TITLES: Record<View, string> = {
@@ -72,6 +73,7 @@ export default function App() {
   const [watchEvents, setWatchEvents] = React.useState<WatchEvent[]>([]);
   const [summaryTemplates, setSummaryTemplates] = React.useState<SummaryTemplate[]>([]);
   const [recordings, setRecordings] = React.useState<Recording[]>([]);
+  const [searchMatchPreviews, setSearchMatchPreviews] = React.useState<Record<string, string[]>>({});
   const [selected, setSelected] = React.useState<RecordingDetail | null>(null);
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
   const [activeTask, setActiveTask] = React.useState<Task | null>(null);
@@ -85,6 +87,15 @@ export default function App() {
   const [llmTest, setLlmTest] = React.useState<LlmConnectivityResult | null>(null);
   const [confirmDialog, setConfirmDialog] = React.useState<ConfirmDialogState | null>(null);
   const [toasts, setToasts] = React.useState<ToastMessage[]>([]);
+
+  const reloadRecordings = React.useCallback(
+    async (query: string, tag: string) => {
+      const result = await listRecordings(query, tag);
+      setRecordings(result.recordings);
+      setSearchMatchPreviews(result.match_previews);
+    },
+    [],
+  );
 
   const [llmDraft, setLlmDraft] = React.useState<LlmSettingsUpdate>({
     provider: "mimo",
@@ -116,40 +127,77 @@ export default function App() {
   const refresh = React.useCallback(
     async (selectedId?: string | null) => {
       const idToRefresh = selectedId === undefined ? selected?.recording.id : selectedId;
-      const [healthResult, recordingsResult, llmResult, watchResult, eventsResult, templatesResult, storageResult] =
-        await Promise.all([
-          getHealth(),
-          listRecordings(appliedFilters.query),
-          getLlmSettings(),
-          getWatchSettings(),
-          listWatchEvents(),
-          listSummaryTemplates(),
-          getStorageSettings(),
-        ]);
 
-      setHealth(healthResult);
-      setRecordings(recordingsResult);
-      setLlmSettings(llmResult);
-      setWatchSettings(watchResult);
-      setWatchDraft(watchResult);
-      setWatchEvents(eventsResult);
-      setStorageSettings(storageResult);
-      setStorageDraft({
-        transcript_dir: storageResult.transcript_dir,
-        summary_dir: storageResult.summary_dir,
-      });
-      setSummaryTemplates(templatesResult);
-      setSummaryMode((current) => current || templatesResult[0]?.id || "structured_summary");
-      setLlmDraft((draft) => ({
-        ...draft,
-        provider: llmResult.provider,
-        base_url: llmResult.base_url,
-        model: llmResult.model,
-        mimo_thinking: llmResult.mimo_thinking,
-        max_completion_tokens: llmResult.max_completion_tokens,
-        temperature: llmResult.temperature,
-        top_p: llmResult.top_p,
-      }));
+      // Health: always independent — must not be blocked by other API failures
+      try {
+        setHealth(await getHealth());
+      } catch (healthErr) {
+        console.warn("Health check failed:", healthErr);
+      }
+
+      // Recordings
+      try {
+        const searchResult = await listRecordings(appliedFilters.query, appliedFilters.tag);
+        setRecordings(searchResult.recordings);
+        setSearchMatchPreviews(searchResult.match_previews);
+      } catch (recErr) {
+        console.warn("List recordings failed:", recErr);
+      }
+
+      // LLM settings
+      try {
+        const llmResult = await getLlmSettings();
+        setLlmSettings(llmResult);
+        setLlmDraft((draft) => ({
+          ...draft,
+          provider: llmResult.provider,
+          base_url: llmResult.base_url,
+          model: llmResult.model,
+          mimo_thinking: llmResult.mimo_thinking,
+          max_completion_tokens: llmResult.max_completion_tokens,
+          temperature: llmResult.temperature,
+          top_p: llmResult.top_p,
+        }));
+      } catch (llmErr) {
+        console.warn("Get LLM settings failed:", llmErr);
+      }
+
+      // Watch settings
+      try {
+        const watchResult = await getWatchSettings();
+        setWatchSettings(watchResult);
+        setWatchDraft(watchResult);
+      } catch (watchErr) {
+        console.warn("Get watch settings failed:", watchErr);
+      }
+
+      // Watch events
+      try {
+        setWatchEvents(await listWatchEvents());
+      } catch (eventsErr) {
+        console.warn("List watch events failed:", eventsErr);
+      }
+
+      // Summary templates
+      try {
+        const templatesResult = await listSummaryTemplates();
+        setSummaryTemplates(templatesResult);
+        setSummaryMode((current) => current || templatesResult[0]?.id || "structured_summary");
+      } catch (tmplErr) {
+        console.warn("List summary templates failed:", tmplErr);
+      }
+
+      // Storage settings
+      try {
+        const storageResult = await getStorageSettings();
+        setStorageSettings(storageResult);
+        setStorageDraft({
+          transcript_dir: storageResult.transcript_dir,
+          summary_dir: storageResult.summary_dir,
+        });
+      } catch (storageErr) {
+        console.warn("Get storage settings failed:", storageErr);
+      }
 
       if (idToRefresh) {
         try {
@@ -159,11 +207,11 @@ export default function App() {
         }
       }
     },
-    [appliedFilters.query, selected?.recording.id]
+    [appliedFilters.query, appliedFilters.tag, selected?.recording.id]
   );
 
   React.useEffect(() => {
-    refresh(null).catch((err) => setError(err.message));
+    refresh(null);
   }, []);
 
   React.useEffect(() => {
@@ -178,21 +226,25 @@ export default function App() {
         const detail = await getRecording(activeTask.recording_id);
         setSelected(detail);
         setActiveTask(detail.tasks.find((task) => task.id === activeTask.id) ?? activeTask);
-        setRecordings(await listRecordings(appliedFilters.query));
+        const searchResult = await listRecordings(appliedFilters.query, appliedFilters.tag);
+        setRecordings(searchResult.recordings);
+        setSearchMatchPreviews(searchResult.match_previews);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
     }, 1500);
     return () => window.clearInterval(timer);
-  }, [activeTask?.id, activeTask?.status, appliedFilters.query]);
+  }, [activeTask?.id, activeTask?.status, appliedFilters.query, appliedFilters.tag]);
 
   const filteredRecordings = React.useMemo(() => {
     const normalizedQuery = appliedFilters.query.trim().toLowerCase();
+    const normalizedTag = appliedFilters.tag.trim().toLowerCase();
     const result = recordings.filter((recording) => {
       const matchesQuery = !normalizedQuery || recording.filename.toLowerCase().includes(normalizedQuery);
+      const matchesTag = !normalizedTag || recording.tags.split(",").some((t) => t.trim().toLowerCase() === normalizedTag);
       const matchesStatus = appliedFilters.statuses.length === 0 || appliedFilters.statuses.includes(recording.status);
       const matchesSource = appliedFilters.sources.length === 0 || appliedFilters.sources.includes(recording.source_type);
-      return matchesQuery && matchesStatus && matchesSource;
+      return matchesQuery && matchesTag && matchesStatus && matchesSource;
     });
     return result.sort((a, b) => {
       if (sortKey === "created_asc") return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
@@ -292,7 +344,7 @@ export default function App() {
       const task = await cancelTask(activeTask.id);
       setActiveTask(task);
       setSelected(await getRecording(task.recording_id));
-      setRecordings(await listRecordings(appliedFilters.query));
+      await reloadRecordings(appliedFilters.query, appliedFilters.tag);
       showToast("任务已取消", "success");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -309,7 +361,7 @@ export default function App() {
     try {
       await updateTranscriptSegment(selected.recording.id, segmentId, text);
       setSelected(await getRecording(selected.recording.id));
-      setRecordings(await listRecordings(appliedFilters.query));
+      await reloadRecordings(appliedFilters.query, appliedFilters.tag);
       showToast("转写片段已保存", "success");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -450,7 +502,7 @@ export default function App() {
     try {
       await scanWatchDirectory();
       setWatchEvents(await listWatchEvents());
-      setRecordings(await listRecordings(appliedFilters.query));
+      await reloadRecordings(appliedFilters.query, appliedFilters.tag);
       showToast("目录扫描已完成", "success");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -493,11 +545,20 @@ export default function App() {
 
   function downloadTranscript(format: ExportFormat) {
     if (!selected) return;
-    window.location.href = apiUrl(`/api/recordings/${selected.recording.id}/exports/transcript?format=${format}`);
+    downloadFile(
+      `/api/recordings/${selected.recording.id}/exports/transcript?format=${format}`,
+      `${selected.recording.filename}-transcript.${format}`
+    ).catch((err) => {
+      setError(err instanceof Error ? err.message : String(err));
+      showToast("转写导出失败", "error");
+    });
   }
 
   function downloadSummary(summaryId: string, format: ExportFormat) {
-    window.location.href = apiUrl(`/api/summaries/${summaryId}/export?format=${format}`);
+    downloadFile(`/api/summaries/${summaryId}/export?format=${format}`, `summary.${format}`).catch((err) => {
+      setError(err instanceof Error ? err.message : String(err));
+      showToast("摘要导出失败", "error");
+    });
   }
 
   async function handleDeleteSummary(summaryId: string) {
@@ -515,7 +576,7 @@ export default function App() {
         try {
           await deleteSummary(summaryId);
           setSelected(await getRecording(recordingId));
-          setRecordings(await listRecordings(appliedFilters.query));
+          await reloadRecordings(appliedFilters.query, appliedFilters.tag);
           showToast("摘要已删除", "success");
         } catch (err) {
           setError(err instanceof Error ? err.message : String(err));
@@ -532,22 +593,28 @@ export default function App() {
       query: draftFilters.query,
       statuses: [...draftFilters.statuses],
       sources: [...draftFilters.sources],
+      tag: draftFilters.tag,
     };
     setAppliedFilters(nextFilters);
-    setRecordings(await listRecordings(nextFilters.query));
+    await reloadRecordings(nextFilters.query, nextFilters.tag);
   }
 
   async function resetFilters() {
     setDraftFilters(EMPTY_FILTERS);
     setAppliedFilters(EMPTY_FILTERS);
     setSortKey("created_desc");
-    setRecordings(await listRecordings());
+    await reloadRecordings("", "");
   }
 
   async function clearAppliedQuery() {
     setDraftFilters((draft) => ({ ...draft, query: "" }));
     setAppliedFilters((filters) => ({ ...filters, query: "" }));
-    setRecordings(await listRecordings());
+    await reloadRecordings("", appliedFilters.tag);
+  }
+
+  function clearAppliedTag() {
+    setDraftFilters((draft) => ({ ...draft, tag: "" }));
+    setAppliedFilters((filters) => ({ ...filters, tag: "" }));
   }
 
   function clearAppliedStatus(status: string) {
@@ -605,8 +672,10 @@ export default function App() {
             applyFilters={applyFilters}
             resetFilters={resetFilters}
             clearAppliedQuery={clearAppliedQuery}
+            clearAppliedTag={clearAppliedTag}
             clearAppliedStatus={clearAppliedStatus}
             clearAppliedSource={clearAppliedSource}
+            searchMatchPreviews={searchMatchPreviews}
             selectRecording={selectRecording}
             handleDelete={handleDelete}
             runTranscription={runTranscription}

@@ -1,18 +1,38 @@
+# Backend
 backend/.venv/
 backend/.env
-.tools/
-.tools/*.zip
-.workbuddy/
-release/
+__pycache__/
+*.pyc
+backend/tests/smoke-data/
+
+# Frontend
 frontend/node_modules/
 frontend/dist/
+
+# Android
+android/.gradle/
+android/.idea/
+android/build/
+android/app/build/
+android/.idea/
+android/local.properties
+android/captures/
+android/.cxx/
+android/app/.cxx/
+*.iml
+.DS_Store
+
+# Data and models
 data/*
 !data/.gitkeep
 models/*
 !models/.gitkeep
 logs/*
 !logs/.gitkeep
-__pycache__/
-*.pyc
-backend/tests/smoke-data/
+
+# Tools
+.tools/
+.tools/*.zip
+.workbuddy/
+release/
 /nul

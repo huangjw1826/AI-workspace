@@ -43,7 +43,7 @@ AI Recorder 是一款**面向 Windows 本机使用的录音整理工作台**。�
 ### 1.3 产品形态
 
 - **部署形态**: 本地 Windows 单机应用（10/11）
-- **用户界面**: 浏览器访问 `http://127.0.0.1:5173`，React SPA 网页
+- **用户界面**: 浏览器访问 `http://127.0.0.1:8000`，由 FastAPI 托管 React SPA
 - **后台服务**: FastAPI + Uvicorn 本地 HTTP 服务（端口 8000）
 - **数据存储**: SQLite 本地数据库 + 本地文件系统
 - **可选打包**: 便携式文件夹（`package-portable.ps1`），可整体复制到其他 PC 使用
@@ -90,7 +90,7 @@ AI Recorder 是一款**面向 Windows 本机使用的录音整理工作台**。�
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      浏览器 (127.0.0.1:5173)                 │
+│                      浏览器 (127.0.0.1:8000)                 │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │             React SPA (Vite + TypeScript)             │   │
 │  │  ┌────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │   │
@@ -647,7 +647,7 @@ cd AI-workspace
 .\setup.ps1        # 安装依赖 + 构建前端
 
 # 日常启动
-.\start-all.ps1    # 启动后端 (FastAPI:8000) + 前端 (Vite:5173)
+.\start-all.ps1    # 启动 FastAPI:8000，并托管前端构建产物
 .\stop-all.ps1     # 停止所有服务
 .\check.ps1        # 检查环境与运行状态
 ```
@@ -739,7 +739,7 @@ Phase 0 (可靠性) ──→ Phase 1 (校对) ──→ Phase 2 (管理) ──
 - **API Key 保护**：仅存 `backend/.env`，不出现在前端产物和日志中
 - **音频路径隔离**：音频端点仅读取数据库登记路径，拒绝路径穿越
 - **上传大小限制**：单文件 500MB，防止内存溢出
-- **CORS 限制**：仅允许 `localhost:5173` 和 `127.0.0.1:5173`
+- **CORS 限制**：仅保留本机开发来源；公网 Android 访问使用 `X-API-Token`
 - **环境变量脱敏**：API Key 读取时返回掩码版本（`sk-a1...b2c3`）
 - **便携包安全**：`-ExcludeSecrets` 选项防止 API Key 泄露
 
@@ -879,7 +879,7 @@ WATCH_DIR=                      # 监控目录
 WATCH_RECURSIVE=true            # 递归扫描
 WATCH_INTERVAL_SECONDS=10       # 扫描间隔
 
-CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173  # CORS 白名单
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173  # 本机开发 CORS 白名单
 ```
 
 ### 13.3 支持的文件格式

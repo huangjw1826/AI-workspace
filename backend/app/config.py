@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     watch_recursive: bool = True
     watch_interval_seconds: int = 10
 
+    api_token: str = ""
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

@@ -5,26 +5,64 @@ import type {
   LlmSettingsUpdate,
   Recording,
   RecordingDetail,
+  SearchResult,
   StorageSettings,
   SummaryTemplate,
   Task,
   WatchEvent,
   WatchSettings
 } from "./types";
+function defaultApiBaseUrl() {
+  const configured = import.meta.env.VITE_API_BASE_URL;
+  if (configured) return configured.replace(/\/+$/, "");
+  if (typeof window !== "undefined" && ["5173", "5174"].includes(window.location.port)) {
+    return "http://127.0.0.1:8000";
+  }
+  return typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:8000";
+}
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
+const API_BASE_URL = defaultApiBaseUrl();
 
 export function apiUrl(path: string) {
-  return `${API_BASE}${path}`;
+  return `${API_BASE_URL}${path}`;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, init);
+  const headers = new Headers(init?.headers);
+  const response = await fetch(apiUrl(path), { ...init, headers });
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || `Request failed: ${response.status}`);
   }
   return response.json() as Promise<T>;
+}
+
+function filenameFromDisposition(disposition: string | null, fallback: string) {
+  if (!disposition) return fallback;
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1].replace(/"/g, ""));
+  const asciiMatch = disposition.match(/filename="?([^";]+)"?/i);
+  return asciiMatch?.[1] ?? fallback;
+}
+
+export async function downloadFile(path: string, fallbackName: string) {
+  const headers = new Headers();
+
+  const response = await fetch(apiUrl(path), { headers });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Download failed: ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const href = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = filenameFromDisposition(response.headers.get("content-disposition"), fallbackName);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(href);
 }
 
 export function getHealth() {
@@ -88,7 +126,7 @@ export function listRecordings(query = "", tag = "") {
   if (query.trim()) params.set("query", query.trim());
   if (tag.trim()) params.set("tag", tag.trim());
   const suffix = params.toString() ? `?${params.toString()}` : "";
-  return request<Recording[]>(`/api/recordings${suffix}`);
+  return request<SearchResult>(`/api/recordings${suffix}`);
 }
 
 export function getRecording(id: string) {
@@ -166,4 +204,12 @@ export function updateTranscriptSegment(recordingId: string, segmentId: string, 
 
 export function deleteSummary(id: string) {
   return request<{ message: string }>(`/api/summaries/${id}`, { method: "DELETE" });
+}
+
+export interface PickFolderResult {
+  path: string;
+}
+
+export function pickFolder(): Promise<PickFolderResult> {
+  return request<PickFolderResult>("/api/pick-folder", { method: "POST" });
 }

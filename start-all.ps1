@@ -10,10 +10,7 @@ $BackendPython = "$Root\backend\.venv\Scripts\python.exe"
 $FrontendDist = "$Root\frontend\dist\index.html"
 $BackendOut = "$LogDir\backend.out.log"
 $BackendErr = "$LogDir\backend.err.log"
-$FrontendOut = "$LogDir\frontend.out.log"
-$FrontendErr = "$LogDir\frontend.err.log"
 $BackendPid = "$LogDir\backend.pid"
-$FrontendPid = "$LogDir\frontend.pid"
 
 function Write-Info($Message) {
     Write-Host "[INFO] $Message"
@@ -65,6 +62,15 @@ function Show-RecentLog($Path, $Title) {
     }
 }
 
+function Repair-ProcessEnvironment {
+    try {
+        [Environment]::SetEnvironmentVariable("PATH", $null, "Process")
+    }
+    catch {
+    }
+}
+
+Repair-ProcessEnvironment
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 
 if (!(Test-Path -LiteralPath $BackendPython)) {
@@ -75,18 +81,18 @@ if (!(Test-Path -LiteralPath $FrontendDist)) {
     throw "Frontend build is missing: $FrontendDist. Run .\setup.ps1 first."
 }
 
-if ((Test-PortOpen 8000) -or (Test-PortOpen 5173)) {
-    if ((Test-HttpOk "http://127.0.0.1:8000/health") -and (Test-HttpOk "http://127.0.0.1:5173")) {
+if (Test-PortOpen 8000) {
+    if ((Test-HttpOk "http://127.0.0.1:8000/health") -and (Test-HttpOk "http://127.0.0.1:8000/")) {
         Write-Ok "AI Recorder is already running"
-        Write-Host "Frontend: http://127.0.0.1:5173"
+        Write-Host "App: http://127.0.0.1:8000"
         if ($OpenBrowser) {
-            Start-Process "http://127.0.0.1:5173"
+            Start-Process "http://127.0.0.1:8000"
         }
         exit 0
     }
     else {
-        Write-Warn "Port 8000 or 5173 is already in use."
-        Write-Host "If AI Recorder is already open, visit: http://127.0.0.1:5173"
+        Write-Warn "Port 8000 is already in use."
+        Write-Host "If AI Recorder is already open, visit: http://127.0.0.1:8000"
         Write-Host "If the page does not open, run .\stop-all.ps1 and then .\start-all.ps1"
         exit 1
     }
@@ -94,33 +100,26 @@ if ((Test-PortOpen 8000) -or (Test-PortOpen 5173)) {
 
 Set-Content -LiteralPath $BackendOut -Value "" -Encoding UTF8
 Set-Content -LiteralPath $BackendErr -Value "" -Encoding UTF8
-Set-Content -LiteralPath $FrontendOut -Value "" -Encoding UTF8
-Set-Content -LiteralPath $FrontendErr -Value "" -Encoding UTF8
 
 Write-Info "Starting backend service..."
-$Backend = Start-Process -FilePath $BackendPython -WorkingDirectory "$Root\backend" -WindowStyle Hidden -PassThru -RedirectStandardOutput $BackendOut -RedirectStandardError $BackendErr -ArgumentList "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000"
+$Backend = Start-Process -FilePath $BackendPython -WorkingDirectory "$Root\backend" -WindowStyle Hidden -PassThru -RedirectStandardOutput $BackendOut -RedirectStandardError $BackendErr -ArgumentList "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"
 $Backend.Id | Set-Content -LiteralPath $BackendPid -Encoding UTF8
-
-Write-Info "Starting frontend page service..."
-$Frontend = Start-Process -FilePath $BackendPython -WorkingDirectory $Root -WindowStyle Hidden -PassThru -RedirectStandardOutput $FrontendOut -RedirectStandardError $FrontendErr -ArgumentList "-m", "http.server", "5173", "--bind", "127.0.0.1", "--directory", "frontend\dist"
-$Frontend.Id | Set-Content -LiteralPath $FrontendPid -Encoding UTF8
 
 if (!(Wait-HttpOk "http://127.0.0.1:8000/health" 40)) {
     Show-RecentLog $BackendErr "Backend did not respond. Recent error log:"
     throw "Backend failed to start. Run .\check.ps1 to inspect the project."
 }
 
-if (!(Wait-HttpOk "http://127.0.0.1:5173" 20)) {
-    Show-RecentLog $FrontendErr "Frontend did not respond. Recent error log:"
-    throw "Frontend failed to start. Run .\check.ps1 to inspect the project."
+if (!(Wait-HttpOk "http://127.0.0.1:8000/" 20)) {
+    Show-RecentLog $BackendErr "Frontend shell did not respond. Recent backend error log:"
+    throw "Frontend shell failed to load from backend. Run .\check.ps1 to inspect the project."
 }
 
 Write-Ok "AI Recorder started"
-Write-Host "Backend:  http://127.0.0.1:8000"
-Write-Host "Frontend: http://127.0.0.1:5173"
+Write-Host "App: http://127.0.0.1:8000"
 Write-Host ""
-Write-Host "Open this URL in your browser: http://127.0.0.1:5173"
+Write-Host "Open this URL in your browser: http://127.0.0.1:8000"
 
 if ($OpenBrowser) {
-    Start-Process "http://127.0.0.1:5173"
+    Start-Process "http://127.0.0.1:8000"
 }

@@ -1,7 +1,13 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session
 
+from app.api.auth import LocalBypassTokenMiddleware
+from app.api.filesystem import router as filesystem_router
 from app.api.health import router as health_router
 from app.api.recordings import router as recordings_router
 from app.api.settings import router as settings_router
@@ -17,9 +23,38 @@ from app.services.task_service import recover_interrupted_tasks
 from app.services.watch_service import watcher
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
+
+
+def register_frontend_routes(app: FastAPI) -> None:
+    if not FRONTEND_DIST.is_dir():
+        return
+
+    assets_dir = FRONTEND_DIST / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="frontend-assets")
+
+    @app.get("/", include_in_schema=False)
+    def frontend_index() -> FileResponse:
+        return FileResponse(FRONTEND_DIST / "index.html")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def frontend_asset(path: str) -> FileResponse:
+        requested = (FRONTEND_DIST / path).resolve()
+        try:
+            requested.relative_to(FRONTEND_DIST.resolve())
+        except ValueError:
+            return FileResponse(FRONTEND_DIST / "index.html")
+        if requested.is_file():
+            return FileResponse(requested)
+        return FileResponse(FRONTEND_DIST / "index.html")
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="AI Recorder", version="0.1.0")
+    app.add_middleware(LocalBypassTokenMiddleware, api_token=settings.api_token)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
@@ -28,6 +63,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(health_router)
+    app.include_router(filesystem_router)
     app.include_router(recordings_router)
     app.include_router(transcribe_router)
     app.include_router(summary_router)
@@ -35,14 +71,29 @@ def create_app() -> FastAPI:
     app.include_router(tasks_router)
     app.include_router(settings_router)
     app.include_router(watch_router)
+    register_frontend_routes(app)
 
     @app.on_event("startup")
     async def on_startup() -> None:
         configure_logging()
-        init_db()
-        with Session(engine) as session:
-            recover_interrupted_tasks(session)
-        watcher.start()
+        try:
+            init_db()
+        except Exception as exc:
+            from app.services.runtime_log import get_logger
+            get_logger().error("Database initialization failed: %s", exc)
+
+        try:
+            with Session(engine) as session:
+                recover_interrupted_tasks(session)
+        except Exception as exc:
+            from app.services.runtime_log import get_logger
+            get_logger().error("Task recovery failed: %s", exc)
+
+        try:
+            watcher.start()
+        except Exception as exc:
+            from app.services.runtime_log import get_logger
+            get_logger().error("Watcher start failed: %s", exc)
 
     @app.on_event("shutdown")
     async def on_shutdown() -> None:

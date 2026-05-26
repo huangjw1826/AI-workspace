@@ -1,0 +1,97 @@
+<resources>
+    <string name="app_name">AI Recorder</string>
+    
+    <!-- Navigation -->
+    <string name="nav_library">录音库</string>
+    <string name="nav_settings">设置</string>
+    <string name="nav_health">健康</string>
+    
+    <!-- Library -->
+    <string name="library_title">录音库</string>
+    <string name="library_empty">还没有录音。点击右下角上传按钮上传音频文件，或通过PC端导入。</string>
+    <string name="library_search">搜索录音、转写内容…</string>
+    
+    <!-- Detail -->
+    <string name="detail_title">录音详情</string>
+    <string name="tab_transcript">转写</string>
+    <string name="tab_summary">摘要</string>
+    <string name="tab_info">信息</string>
+    <string name="copy_text">复制文本</string>
+    <string name="export_md">导出MD</string>
+    <string name="no_transcript">暂无转写内容</string>
+    <string name="no_summary">暂无摘要内容</string>
+    <string name="transcribing">正在转写…</string>
+    <string name="summarizing">正在生成摘要…</string>
+    <string name="select_summary_template">选择摘要模板</string>
+    
+    <!-- Upload -->
+    <string name="upload_title">上传录音</string>
+    <string name="upload_select_file">选择音频文件</string>
+    <string name="upload_select_more">+ 选择更多文件</string>
+    <string name="upload_success">上传成功</string>
+    <string name="upload_failed">上传失败</string>
+    <string name="upload_waiting">等待中</string>
+    <string name="uploading">上传中</string>
+    <string name="upload_completed">完成</string>
+    <string name="upload_retry">重试</string>
+    
+    <!-- Settings -->
+    <string name="settings_title">设置</string>
+    <string name="settings_server_config">服务器配置</string>
+    <string name="settings_server_url">服务器地址</string>
+    <string name="settings_api_token">API Token</string>
+    <string name="settings_test_connection">测试连接</string>
+    <string name="settings_testing_connection">正在测试…</string>
+    <string name="settings_connection_success">连接成功</string>
+    <string name="settings_connection_failed">连接失败</string>
+    <string name="settings_save">保存设置</string>
+    <string name="settings_llm_config">LLM 配置（只读）</string>
+    <string name="settings_llm_provider">供应商</string>
+    <string name="settings_llm_model">模型</string>
+    <string name="settings_about">关于</string>
+    <string name="settings_version">版本</string>
+    <string name="settings_check_update">检查更新</string>
+    
+    <!-- Health -->
+    <string name="health_title">系统健康</string>
+    <string name="service_status">服务状态</string>
+    <string name="asr_engine">转写引擎</string>
+    <string name="llm_config_health">LLM 配置</string>
+    <string name="system_info">系统信息</string>
+    <string name="fastapi_backend">FastAPI 后端</string>
+    <string name="cloudflare_tunnel">Cloudflare 隧道</string>
+    <string name="funasr_model">FunASR 模型</string>
+    <string name="ffmpeg">FFmpeg</string>
+    <string name="api_connection">API 连接</string>
+    <string name="current_model">当前模型</string>
+    <string name="cpu_usage">CPU 使用率</string>
+    <string name="memory_usage">内存使用</string>
+    <string name="disk_space">磁盘空间</string>
+    <string name="uptime">运行时长</string>
+    <string name="status_ok">正常</string>
+    <string name="status_warning">警告</string>
+    <string name="status_error">错误</string>
+    <string name="status_connected">已连接</string>
+    <string name="status_disconnected">已断开</string>
+    <string name="status_loaded">已加载</string>
+    <string name="status_installed">已安装</string>
+    <string name="refresh">刷新</string>
+    <string name="refreshing">正在刷新…</string>
+    
+    <!-- Status -->
+    <string name="status_done">✓ 已完成</string>
+    <string name="status_processing">⏳ 转写中</string>
+    
+    <!-- Common -->
+    <string name="copied">已复制到剪贴板</string>
+    <string name="exporting">正在导出…</string>
+    <string name="deleted">删除成功</string>
+    <string name="cancel">取消</string>
+    <string name="confirm">确认</string>
+    <string name="loading">加载中…</string>
+    <string name="error">出错了</string>
+    <string name="retry">重试</string>
+    <string name="pc_offline">PC 已离线，请确认 PC 开机且 cloudflared 正在运行</string>
+    <string name="token_invalid">API Token 无效，请重新输入</string>
+    <string name="network_timeout">网络连接超时，请检查网络后重试</string>
+</resources>
