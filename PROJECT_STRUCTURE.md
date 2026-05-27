@@ -51,6 +51,7 @@ backend/
 ├── app/
 │   ├── api/                    # API 路由层
 │   │   ├── auth.py            # 认证中间件
+│   │   ├── events.py           # 事件订阅 API (SSE)
 │   │   ├── filesystem.py       # 文件系统操作 API
 │   │   ├── health.py           # 健康检查 API
 │   │   ├── recordings.py       # 录音管理 API
@@ -154,39 +155,47 @@ android/
 │   │   ├── java/com/airecorder/android/
 │   │   │   ├── data/                    # 数据层
 │   │   │   │   ├── local/              # 本地存储
-│   │   │   │   │   └── PreferencesManager.kt  # DataStore 配置管理
+│   │   │   │   │   ├── PreferencesManager.kt  # DataStore 配置管理
+│   │   │   │   │   └── CacheHelper.kt          # 缓存辅助工具
 │   │   │   │   ├── model/              # 数据模型
 │   │   │   │   │   └── Models.kt       # 所有数据模型定义
 │   │   │   │   ├── remote/             # 远程 API
 │   │   │   │   │   ├── ApiService.kt   # Retrofit API 接口
-│   │   │   │   │   └── AuthInterceptor.kt # Token 认证拦截器
+│   │   │   │   │   ├── AuthInterceptor.kt # Token 认证拦截器
+│   │   │   │   │   ├── SseClient.kt    # SSE 事件客户端
+│   │   │   │   │   └── SseServiceManager.kt # SSE 服务管理器
 │   │   │   │   └── repository/         # 仓库层
 │   │   │   │       ├── RecordingRepository.kt  # 录音数据仓库
 │   │   │   │       └── SettingsRepository.kt   # 设置数据仓库
-│   │   │   ├── di/                      # 依赖注入层
-│   │   │   │   └── AppModule.kt         # Hilt 模块配置
-│   │   │   ├── ui/                      # UI 层
-│   │   │   │   ├── components/          # 可复用组件
-│   │   │   │   │   ├── BottomNavigationBar.kt
-│   │   │   │   │   └── RecordingItem.kt
-│   │   │   │   ├── navigation/          # 导航配置
+│   │   │   ├── di/                     # 依赖注入层
+│   │   │   │   └── AppModule.kt        # Hilt 模块配置
+│   │   │   ├── ui/                     # UI 层
+│   │   │   │   ├── components/         # 可复用组件
+│   │   │   │   │   ├── AnimationComponents.kt  # 动画组件
+│   │   │   │   │   ├── BottomNavigationBar.kt  # 底部导航栏
+│   │   │   │   │   ├── RecordingItem.kt        # 录音列表项
+│   │   │   │   │   ├── StateComponents.kt      # 状态组件
+│   │   │   │   │   ├── StatusIndicator.kt      # 状态指示器
+│   │   │   │   │   └── ToastManager.kt         # Toast 消息管理器
+│   │   │   │   ├── navigation/         # 导航配置
 │   │   │   │   │   └── NavDestinations.kt
-│   │   │   │   ├── screens/             # 页面
+│   │   │   │   ├── screens/            # 页面
 │   │   │   │   │   ├── DetailScreen.kt          # 录音详情页
 │   │   │   │   │   ├── DetailViewModel.kt
 │   │   │   │   │   ├── HealthScreen.kt          # 健康面板页
 │   │   │   │   │   ├── LibraryScreen.kt         # 录音库页
 │   │   │   │   │   ├── LibraryViewModel.kt
 │   │   │   │   │   ├── SettingsScreen.kt        # 设置页
-│   │   │   │   │   └── UploadBottomSheet.kt     # 上传底部弹窗
-│   │   │   │   ├── theme/               # 主题配置
+│   │   │   │   │   └── UploadBottomSheet.kt    # 上传底部弹窗
+│   │   │   │   ├── theme/              # 主题配置
 │   │   │   │   │   ├── Color.kt
+│   │   │   │   │   ├── Shape.kt
 │   │   │   │   │   ├── Theme.kt
 │   │   │   │   │   └── Type.kt
-│   │   │   │   └── AIRecorderApp.kt     # 应用入口 Composable
-│   │   │   ├── util/                    # 工具类
+│   │   │   │   └── AIRecorderApp.kt    # 应用入口 Composable
+│   │   │   ├── util/                   # 工具类
 │   │   │   │   └── FormatUtils.kt
-│   │   │   ├── MainActivity.kt          # 主 Activity
+│   │   │   ├── MainActivity.kt         # 主 Activity
 │   │   │   └── AIRecorderApplication.kt # Application 类
 │   │   ├── res/                        # 资源文件
 │   │   │   ├── values/
@@ -199,6 +208,7 @@ android/
 ├── settings.gradle.kts                # Gradle 设置
 ├── gradle.properties
 ├── gradlew / gradlew.bat
+├── PROJECT_STRUCTURE.md               # Android 端项目结构说明
 └── README.md                          # Android 端快速开始指南
 ```
 

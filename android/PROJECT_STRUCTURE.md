@@ -32,12 +32,15 @@ app/src/main/
 ├── java/com/airecorder/android/
 │   ├── data/                           # 数据层
 │   │   ├── local/                      # 本地存储
-│   │   │   └── PreferencesManager.kt    # DataStore 配置管理（服务器地址、Token）
+│   │   │   ├── PreferencesManager.kt    # DataStore 配置管理（服务器地址、Token）
+│   │   │   └── CacheHelper.kt          # 缓存辅助工具
 │   │   ├── model/                      # 数据模型
 │   │   │   └── Models.kt               # 所有数据模型定义
 │   │   ├── remote/                     # 远程 API
 │   │   │   ├── ApiService.kt           # Retrofit API 接口定义
-│   │   │   └── AuthInterceptor.kt      # Token 认证拦截器
+│   │   │   ├── AuthInterceptor.kt      # Token 认证拦截器
+│   │   │   ├── SseClient.kt            # SSE 事件客户端
+│   │   │   └── SseServiceManager.kt    # SSE 服务管理器
 │   │   └── repository/                  # 仓库层
 │   │       ├── RecordingRepository.kt   # 录音数据仓库
 │   │       └── SettingsRepository.kt    # 设置数据仓库
@@ -45,10 +48,12 @@ app/src/main/
 │   │   └── AppModule.kt                # Hilt 模块配置
 │   ├── ui/                             # UI 层
 │   │   ├── components/                  # 可复用组件
+│   │   │   ├── AnimationComponents.kt  # 动画组件
 │   │   │   ├── BottomNavigationBar.kt  # 底部导航栏
 │   │   │   ├── RecordingItem.kt        # 录音列表项组件
 │   │   │   ├── StateComponents.kt      # 状态组件（加载、空状态、错误）
-│   │   │   └── StatusIndicator.kt      # 状态指示器组件
+│   │   │   ├── StatusIndicator.kt      # 状态指示器组件
+│   │   │   └── ToastManager.kt         # Toast 消息管理器
 │   │   ├── navigation/                  # 导航配置
 │   │   │   └── NavDestinations.kt      # 导航目标定义
 │   │   ├── screens/                     # 页面
@@ -61,6 +66,7 @@ app/src/main/
 │   │   │   └── UploadBottomSheet.kt    # 上传底部弹窗
 │   │   ├── theme/                       # 主题配置
 │   │   │   ├── Color.kt                # 颜色定义
+│   │   │   ├── Shape.kt                # 形状定义
 │   │   │   ├── Theme.kt                # 主题配置
 │   │   │   └── Type.kt                 # 字体样式
 │   │   └── AIRecorderApp.kt            # 应用入口 Composable
@@ -87,6 +93,7 @@ app/src/main/
   - 服务器地址
   - API Token
   - 连接状态
+- **CacheHelper.kt**：缓存辅助工具
 
 #### 数据模型 (`model/`)
 - **Models.kt**：定义所有 API 响应和请求的数据结构
@@ -101,6 +108,8 @@ app/src/main/
 #### 远程 API (`remote/`)
 - **ApiService.kt**：Retrofit 接口定义，包含所有 API 调用
 - **AuthInterceptor.kt**：OkHttp 拦截器，自动添加 `X-API-Token` 请求头
+- **SseClient.kt**：SSE 事件客户端，接收服务器推送的实时事件
+- **SseServiceManager.kt**：SSE 服务管理器，管理 SSE 连接和事件分发
 
 #### 仓库层 (`repository/`)
 - **RecordingRepository.kt**：录音数据仓库
@@ -145,6 +154,7 @@ app/src/main/
 - **NavDestinations.kt**：定义导航路由和参数
 
 #### 组件 (`components/`)
+- **AnimationComponents.kt**：动画组件集合
 - **BottomNavigationBar.kt**：底部导航栏，4 个 Tab
 - **RecordingItem.kt**：录音列表项组件
 - **StateComponents.kt**：状态组件集合
@@ -155,9 +165,11 @@ app/src/main/
   - `RecordingStatus`：状态枚举（待处理、已转写、已摘要、处理中、失败）
   - `getStatus()`：根据录音信息判断状态
   - `StatusIndicator`：状态指示器 UI 组件
+- **ToastManager.kt**：Toast 消息管理器
 
 #### 主题 (`theme/`)
 - **Color.kt**：颜色定义
+- **Shape.kt**：形状定义
 - **Theme.kt**：Material 3 主题配置
 - **Type.kt**：字体样式
 

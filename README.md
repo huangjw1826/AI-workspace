@@ -1,20 +1,20 @@
 # AI Recorder
 
-AI Recorder 是一个面向 Windows 本机使用的录音整理工具，集成音频入库、本地离线转写、云端大模型摘要、多格式导出和目录监控功能。
+AI Recorder 是一个面向 Windows 本机的录音整理工具，集成音频入库、本地离线转写、云端大模型摘要、多格式导出和目录监控功能。同时提供原生 Android 客户端，支持远程访问 PC 端录音库。
 
-**核心特点：**
+## 核心特性
+
 - 🎙️ **本地转写**：使用 FunASR 在本机完成中文语音转文字，隐私安全
 - 🤖 **智能摘要**：支持 DeepSeek、通义千问、小米 MiMo 等多种大模型
 - 📱 **远程访问**：原生 Android 客户端可远程访问 PC 端录音库
 - 📤 **多格式导出**：支持 Markdown、TXT、JSON、SRT、DOCX 等格式
 - 🔍 **智能搜索**：支持文件名、标签、转写内容全文搜索
 - 👁️ **目录监控**：自动发现并入库新音频文件
-
----
+- ⚡ **实时同步**：支持 SSE 实时事件推送，任务状态实时更新
 
 ## 功能概览
 
-| 功能 | 说明 |
+| 模块 | 功能 |
 |------|------|
 | **录音库管理** | 集中管理音频文件、时长、来源、创建时间和处理状态 |
 | **文件上传** | 支持 `wav`、`mp3`、`m4a`、`flac`、`aac`、`ogg` 等格式 |
@@ -26,8 +26,42 @@ AI Recorder 是一个面向 Windows 本机使用的录音整理工具，集成�
 | **批量操作** | 批量转写、批量摘要、批量删除 |
 | **目录监控** | 定时扫描指定目录，新音频自动入库 |
 | **Android 访问** | 通过公网域名 + API Token 远程访问录音库 |
+| **实时状态** | SSE 实时推送任务进度和系统状态 |
 
----
+## 项目结构
+
+```
+AI-workspace/
+├── backend/           # FastAPI 后端服务
+│   ├── app/           # 应用代码
+│   │   ├── api/       # API 路由
+│   │   ├── services/  # 业务服务
+│   │   ├── models/    # 数据模型
+│   │   └── db/        # 数据库层
+│   ├── tests/         # 单元测试
+│   └── PROJECT_STRUCTURE.md
+├── frontend/          # React 前端应用
+│   ├── src/
+│   │   ├── pages/     # 页面组件
+│   │   ├── components/# 可复用组件
+│   │   └── lib/       # 工具函数
+│   └── PROJECT_STRUCTURE.md
+├── android/           # Android 原生客户端
+│   ├── app/src/main/
+│   │   ├── java/      # Kotlin 代码
+│   │   └── res/       # 资源文件
+│   ├── PROJECT_STRUCTURE.md
+│   └── README.md
+├── data/              # 数据库、音频、转写和摘要数据
+├── models/            # FunASR 离线模型缓存
+├── logs/              # 运行日志
+├── docs/              # 项目文档
+├── scripts/           # 辅助脚本
+├── PROJECT_STRUCTURE.md  # 整体项目结构说明
+├── CODE_WIKI.md       # 代码维基
+├── CHANGELOG.md       # 变更日志
+└── README.md          # 本文件
+```
 
 ## 快速开始
 
@@ -66,8 +100,6 @@ cd AI-workspace
 .\check.ps1          # 检查依赖、端口、配置和服务状态
 ```
 
----
-
 ## 首次使用流程
 
 1. 打开 `http://127.0.0.1:8000`
@@ -80,8 +112,6 @@ cd AI-workspace
 8. 下载导出文件（支持 Markdown/TXT/JSON/SRT/DOCX）
 
 > **注意**：目录监控只负责发现并入库新音频，不会自动转写或摘要，避免误处理大量文件。
-
----
 
 ## 配置大模型摘要
 
@@ -114,64 +144,25 @@ LLM_TIMEOUT_SECONDS=60
 
 更多说明见 [docs/cloud-llm-providers.md](docs/cloud-llm-providers.md)
 
----
-
-## 项目结构
-
-```
-AI-workspace/
-├── backend/           # FastAPI 后端服务
-│   ├── app/           # 应用代码
-│   │   ├── api/       # API 路由
-│   │   ├── services/  # 业务服务
-│   │   ├── models/    # 数据模型
-│   │   └── db/        # 数据库层
-│   └── tests/         # 单元测试
-├── frontend/          # React 前端应用
-│   └── src/
-│       ├── pages/     # 页面组件
-│       ├── components/# 可复用组件
-│       └── lib/       # 工具函数
-├── android/           # Android 原生客户端
-│   └── app/src/main/
-│       ├── java/      # Kotlin 代码
-│       └── res/       # 资源文件
-├── data/              # 数据库、音频、转写和摘要数据
-├── models/            # FunASR 离线模型缓存
-├── logs/              # 运行日志
-├── scripts/           # 辅助脚本
-└── docs/              # 项目文档
-```
-
-### 详细结构文档
-
-- [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) - 整体项目结构
-- [backend/PROJECT_STRUCTURE.md](backend/PROJECT_STRUCTURE.md) - 后端详细结构
-- [frontend/PROJECT_STRUCTURE.md](frontend/PROJECT_STRUCTURE.md) - 前端详细结构
-- [android/PROJECT_STRUCTURE.md](android/PROJECT_STRUCTURE.md) - Android 端详细结构
-
----
-
 ## 技术栈
 
 | 层级 | 技术 | 版本 |
 |------|------|------|
 | **后端** | Python | 3.10+ |
-| | FastAPI | - |
-| | SQLModel | - |
-| | SQLite | - |
-| | FunASR | - |
+|  | FastAPI | - |
+|  | SQLModel | - |
+|  | SQLite | - |
+|  | FunASR | - |
 | **前端** | React | 19 |
-| | TypeScript | - |
-| | Vite | - |
-| | Lucide React | - |
+|  | TypeScript | - |
+|  | Vite | - |
+|  | Lucide React | - |
 | **Android** | Kotlin | - |
-| | Jetpack Compose | - |
-| | Material Design 3 | - |
-| | Retrofit | - |
-| | Hilt | - |
-
----
+|  | Jetpack Compose | - |
+|  | Material Design 3 | - |
+|  | Retrofit | - |
+|  | Hilt | - |
+|  | DataStore Preferences | - |
 
 ## 本地数据和隐私
 
@@ -182,7 +173,7 @@ backend/.env           # 环境变量（含 API Key）
 backend/.venv/         # Python 虚拟环境
 frontend/node_modules/ # Node.js 依赖
 frontend/dist/         # 前端构建产物
-data/                  # 数据库和音频数据
+data/                  # 数据库、录音、转写和摘要
 models/                # FunASR 模型缓存
 logs/                  # 运行日志
 ```
@@ -191,7 +182,24 @@ logs/                  # 运行日志
 - `data/` - 数据库、录音、转写和摘要结果
 - `backend/.env` - 配置文件
 
----
+## Android 客户端
+
+Android 客户端支持远程访问 PC 端录音库：
+
+**功能**：
+- 查看录音列表和详情
+- 查看转写和摘要内容
+- 上传音频到 PC 端
+- 系统健康状态监控
+- 删除录音
+- 实时任务状态推送（SSE）
+
+**配置方式**：
+1. 使用 Android Studio 打开 `android/` 目录
+2. 配置服务器地址和 API Token
+3. 构建并安装到设备
+
+详细说明见 [android/README.md](android/README.md) 和 [docs/android-remote-access.md](docs/android-remote-access.md)
 
 ## 故障排查
 
@@ -201,7 +209,7 @@ logs/                  # 运行日志
 .\check.ps1
 ```
 
-**常见问题：**
+**常见问题**：
 
 | 问题 | 解决方案 |
 |------|----------|
@@ -213,27 +221,14 @@ logs/                  # 运行日志
 
 更多说明见 [docs/troubleshooting.md](docs/troubleshooting.md)
 
----
+## 相关文档
 
-## Android 客户端
-
-Android 客户端支持远程访问 PC 端录音库：
-
-**功能：**
-- 查看录音列表和详情
-- 查看转写和摘要内容
-- 上传音频到 PC 端
-- 系统健康状态监控
-- 删除录音
-
-**配置方式：**
-1. 使用 Android Studio 打开 `android/` 目录
-2. 配置服务器地址和 API Token
-3. 构建并安装到设备
-
-详细说明见 [android/README.md](android/README.md) 和 [docs/android-remote-access.md](docs/android-remote-access.md)
-
----
+- [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) - 整体项目结构
+- [backend/PROJECT_STRUCTURE.md](backend/PROJECT_STRUCTURE.md) - 后端详细结构
+- [frontend/PROJECT_STRUCTURE.md](frontend/PROJECT_STRUCTURE.md) - 前端详细结构
+- [android/PROJECT_STRUCTURE.md](android/PROJECT_STRUCTURE.md) - Android 端详细结构
+- [CODE_WIKI.md](CODE_WIKI.md) - 代码维基
+- [CHANGELOG.md](CHANGELOG.md) - 变更日志
 
 ## 许可证
 
