@@ -27,8 +27,7 @@ import com.airecorder.android.ui.theme.*
 @Composable
 fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
-    onNavigateToDetail: (String) -> Unit,
-    onNavigateToSettings: () -> Unit
+    onNavigateToDetail: (String) -> Unit
 ) {
     LaunchedEffect(Unit) {
         viewModel.loadRecordings()
@@ -36,7 +35,6 @@ fun LibraryScreen(
 
     val uiState by viewModel.uiState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
-    var showUploadSheet by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -48,22 +46,6 @@ fun LibraryScreen(
                         fontWeight = FontWeight.Bold
                     )
                 },
-                actions = {
-                    IconButton(onClick = { showUploadSheet = true }) {
-                        Icon(
-                            imageVector = Icons.Outlined.CloudUpload,
-                            contentDescription = stringResource(R.string.upload),
-                            tint = Primary
-                        )
-                    }
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(
-                            imageVector = Icons.Outlined.Settings,
-                            contentDescription = stringResource(R.string.settings_title),
-                            tint = TextSecondary
-                        )
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Background,
                     scrolledContainerColor = Surface
@@ -71,7 +53,7 @@ fun LibraryScreen(
             )
         },
         containerColor = Background,
-        contentWindowInsets = WindowInsets.safeDrawing
+        contentWindowInsets = WindowInsets(0, 0, 0, 0) // 已经由外层 Scaffold 处理了 padding
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -113,25 +95,7 @@ fun LibraryScreen(
                     if (state.recordings.isEmpty()) {
                         EmptyState(
                             title = stringResource(R.string.library_empty),
-                            subtitle = stringResource(R.string.library_empty_subtitle),
-                            action = {
-                                Button(
-                                    onClick = { showUploadSheet = true },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Primary,
-                                        contentColor = OnPrimary
-                                    ),
-                                    shape = RoundedCornerShape(16.dp),
-                                    modifier = Modifier.size(64.dp),
-                                    contentPadding = PaddingValues(0.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(32.dp)
-                                    )
-                                }
-                            }
+                            subtitle = stringResource(R.string.library_empty_subtitle)
                         )
                     } else {
                         RecordingList(
@@ -148,12 +112,6 @@ fun LibraryScreen(
                 }
             }
         }
-    }
-
-    if (showUploadSheet) {
-        UploadBottomSheet(
-            onDismiss = { showUploadSheet = false }
-        )
     }
 }
 

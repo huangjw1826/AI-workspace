@@ -43,8 +43,7 @@ fun DetailScreen(
     viewModel: DetailViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
     onNavigateToLibrary: () -> Unit,
-    onNavigateToSettings: () -> Unit,
-    onNavigateToHealth: () -> Unit // Kept for compatibility but unused
+    onNavigateToSettings: () -> Unit
 ) {
     LaunchedEffect(recordingId) {
         viewModel.loadRecording(recordingId)
@@ -56,6 +55,7 @@ fun DetailScreen(
     val isSummarizing by viewModel.isSummarizing.collectAsState()
     val showSummaryTemplates by viewModel.showSummaryTemplates.collectAsState()
     val summaryTemplates by viewModel.summaryTemplates.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     val clipboardManager = LocalClipboardManager.current
 
     Scaffold(
@@ -88,6 +88,13 @@ fun DetailScreen(
                 },
                 actions = {
                     if (uiState is DetailUiState.Success) {
+                        IconButton(onClick = { viewModel.refreshRecording() }) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "刷新",
+                                tint = TextPrimary
+                            )
+                        }
                         IconButton(
                             onClick = { viewModel.deleteRecording(recordingId, onNavigateBack) }
                         ) {
@@ -318,6 +325,13 @@ fun SummaryContent(
     clipboardManager: androidx.compose.ui.platform.ClipboardManager,
     isSummarizing: Boolean
 ) {
+    val sortedSummaries = data.summaries.sortedByDescending { summary ->
+        summary.createdAt?.let { createdAt ->
+            parseTimestampToMillis(createdAt)
+        } ?: 0L
+    }
+    val latestId = sortedSummaries.firstOrNull()?.id
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -329,29 +343,29 @@ fun SummaryContent(
             message = stringResource(R.string.summarizing)
         )
 
-        if (data.summaries.isEmpty() && !isSummarizing) {
+        if (sortedSummaries.isEmpty() && !isSummarizing) {
             EmptyContentCard(
                 icon = Icons.Default.Description,
                 title = stringResource(R.string.no_summary),
                 subtitle = stringResource(R.string.no_summary_hint)
             )
         } else {
-            data.summaries.forEachIndexed { index, summary ->
+            sortedSummaries.forEachIndexed { index, summary ->
                 ExpandableSummaryCard(
                     summary = summary,
-                    isLatest = index == 0,
-                    isInitiallyExpanded = index == 0,
+                    isLatest = summary.id == latestId,
+                    isInitiallyExpanded = summary.id == latestId,
                     onCopy = { clipboardManager.setText(AnnotatedString(summary.content)) }
                 )
             }
         }
 
-        if (data.summaries.isNotEmpty()) {
+        if (sortedSummaries.isNotEmpty()) {
             ActionButtons(
                 hasContent = true,
                 onCopy = { 
-                    val allText = data.summaries.joinToString("\n\n") { s -> 
-                        val title = getTemplateTitle(s.templateId)
+                    val allText = sortedSummaries.joinToString("\n\n") { s -> 
+                        val title = getTemplateTitle(s.mode)
                         "--- $title ---\n${s.content}" 
                     }
                     clipboardManager.setText(AnnotatedString(allText)) 
@@ -375,7 +389,7 @@ private fun ExpandableSummaryCard(
     val rotationState by animateFloatAsState(targetValue = if (isExpanded) 180f else 0f, label = "rotation")
     val wordCount = summary.content.length 
     val previewText = summary.content.take(60).replace("\n", " ") + "..."
-    val summaryTitle = getTemplateTitle(summary.templateId)
+    val summaryTitle = getTemplateTitle(summary.mode)
 
     Card(
         modifier = Modifier.fillMaxWidth().animateContentSize(),
@@ -430,7 +444,7 @@ private fun ExpandableSummaryCard(
                         }
                         
                         Text(
-                            text = "${if (summary.createdAt != null) FormatUtils.formatDate(summary.createdAt) else "AI Generated"} · 约 $wordCount 字",
+                            text = "${if (summary.createdAt != null) FormatUtils.formatShortDate(summary.createdAt) else "AI Generated"} · 约 $wordCount 字",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextTertiary,
                             modifier = Modifier.padding(top = 2.dp)
@@ -857,5 +871,39 @@ private fun TemplateCard(
                 )
             }
         }
+    }
+}
+
+private fun parseTimestampToMillis(timestamp: String): Long {
+    return try {
+        var ts = timestamp
+        if (ts.endsWith("Z")) {
+            ts = ts.substring(0, ts.length - 1)
+        }
+        if (ts.contains(".")) {
+            ts = ts.substring(0, ts.indexOf("."))
+        }
+        val parts = ts.split("T")
+        if (parts.size == 2) {
+            val dateParts = parts[0].split("-")
+            val timeParts = parts[1].split(":")
+            if (dateParts.size == 3 && timeParts.size >= 2) {
+                val year = dateParts[0].toInt()
+                val month = dateParts[1].toInt()
+                val day = dateParts[2].toInt()
+                val hour = timeParts[0].toInt()
+                val minute = timeParts[1].toInt()
+                val second = if (timeParts.size > 2) timeParts[2].toInt() else 0
+                val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                calendar.set(year, month - 1, day, hour, minute, second)
+                calendar.timeInMillis
+            } else {
+                0L
+            }
+        } else {
+            0L
+        }
+    } catch (e: Exception) {
+        0L
     }
 }

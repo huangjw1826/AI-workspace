@@ -56,6 +56,7 @@ class LibraryViewModel @Inject constructor(
     private var pollingJob: Job? = null
     
     init {
+        loadRecordings()
         startPolling()
     }
     
@@ -66,7 +67,11 @@ class LibraryViewModel @Inject constructor(
             }
             repository.getRecordings(_searchQuery.value).fold(
                 onSuccess = { result ->
-                    _uiState.value = LibraryUiState.Success(result.recordings)
+                    // 仅在数据真实变化时更新
+                    if (_uiState.value !is LibraryUiState.Success || 
+                        (_uiState.value as LibraryUiState.Success).recordings != result.recordings) {
+                        _uiState.value = LibraryUiState.Success(result.recordings)
+                    }
                 },
                 onFailure = { exception ->
                     if (_uiState.value !is LibraryUiState.Success) {
@@ -74,6 +79,18 @@ class LibraryViewModel @Inject constructor(
                     }
                 }
             )
+        }
+    }
+    
+    private var searchJob: Job? = null
+    fun onSearchQueryChanged(query: String) {
+        if (_searchQuery.value == query) return
+        _searchQuery.value = query
+        
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(300)
+            loadRecordings()
         }
     }
     
@@ -93,11 +110,6 @@ class LibraryViewModel @Inject constructor(
                 delay(5000) // Poll every 5 seconds
             }
         }
-    }
-    
-    fun onSearchQueryChanged(query: String) {
-        _searchQuery.value = query
-        loadRecordings()
     }
     
     fun refresh() {

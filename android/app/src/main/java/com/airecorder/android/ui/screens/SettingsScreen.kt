@@ -157,7 +157,7 @@ fun SettingsScreen(
             )
         },
         containerColor = Background,
-        contentWindowInsets = WindowInsets.safeDrawing
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
         Column(
             modifier = Modifier

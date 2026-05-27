@@ -103,6 +103,7 @@ AI-workspace/
 │   ├── app/
 │   │   ├── api/               # API 路由定义
 │   │   │   ├── auth.py        # 认证中间件
+│   │   │   ├── events.py      # 事件订阅 API (SSE)
 │   │   │   ├── filesystem.py  # 文件系统 API
 │   │   │   ├── health.py      # 健康检查
 │   │   │   ├── recordings.py  # 录音管理 API

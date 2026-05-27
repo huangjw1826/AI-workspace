@@ -46,6 +46,9 @@ frontend/
 │   │   │   ├── SettingsSection.tsx # 设置区块
 │   │   │   ├── InfoCard.tsx        # 信息卡片
 │   │   │   └── StatusBadge.tsx     # 状态徽章
+│   ├── hooks/                       # 自定义 Hooks
+│   │   ├── useRecordings.ts        # 录音数据管理 Hook
+│   │   └── useSSE.ts               # SSE 事件订阅 Hook
 │   ├── lib/                        # 工具函数和库
 │   │   ├── api.ts                 # API 客户端
 │   │   ├── types.ts               # TypeScript 类型定义

@@ -1,93 +1,122 @@
 package com.airecorder.android.ui.components
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.airecorder.android.R
 import com.airecorder.android.ui.navigation.NavDestinations
 import com.airecorder.android.ui.theme.Primary
-import com.airecorder.android.ui.theme.TextSecondary
-import com.airecorder.android.ui.theme.Surface
+import com.airecorder.android.ui.theme.SurfaceVariant
+import com.airecorder.android.ui.theme.AppIconDefaults
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+
+// 底部导航项目数据类
+private data class BottomNavItem(
+    val destination: NavDestinations,
+    val selectedIcon: ImageVector,
+    val unselectedIcon: ImageVector,
+    val label: String
+)
 
 @Composable
 fun BottomNavigationBar(
     currentDestination: NavDestinations,
-    onNavigateTo: (NavDestinations) -> Unit
+    onNavigateTo: (NavDestinations) -> Unit,
+    onUploadClick: () -> Unit
 ) {
-    Surface(
-        color = Surface,
-        tonalElevation = 0.dp,
-        modifier = Modifier.fillMaxWidth().height(80.dp)
+    // Material 3 导航栏
+    NavigationBar(
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 3.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            NavItem(
-                icon = if (currentDestination == NavDestinations.Library) Icons.Filled.Home else Icons.Outlined.Home,
-                label = "Home",
-                selected = currentDestination == NavDestinations.Library,
-                onClick = { onNavigateTo(NavDestinations.Library) }
+        // 1. 录音库
+        val isLibrarySelected = currentDestination == NavDestinations.Library
+        NavigationBarItem(
+            selected = isLibrarySelected,
+            onClick = { onNavigateTo(NavDestinations.Library) },
+            icon = {
+                Icon(
+                    imageVector = if (isLibrarySelected) Icons.Filled.Folder else Icons.Outlined.Folder,
+                    contentDescription = stringResource(R.string.nav_library),
+                    modifier = Modifier.size(AppIconDefaults.NavItemSize)
+                )
+            },
+            label = {
+                Text(
+                    text = stringResource(R.string.nav_library),
+                    style = MaterialTheme.typography.labelMedium
+                )
+            },
+            colors = AppIconDefaults.navItemColors()
+        )
+
+        // 2. 中间上传按钮 (带交互样式)
+        NavigationBarItem(
+            selected = false,
+            onClick = onUploadClick,
+            icon = {
+                Surface(
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(48.dp),
+                    shadowElevation = 4.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = stringResource(R.string.upload),
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+            },
+            label = {
+                Text(
+                    text = stringResource(R.string.upload),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            alwaysShowLabel = true,
+            colors = NavigationBarItemDefaults.colors(
+                indicatorColor = Color.Transparent
             )
-            NavItem(
-                icon = if (currentDestination == NavDestinations.Health) Icons.Filled.MonitorHeart else Icons.Outlined.MonitorHeart,
-                label = "Health",
-                selected = currentDestination == NavDestinations.Health,
-                onClick = { onNavigateTo(NavDestinations.Health) }
-            )
-            NavItem(
-                icon = if (currentDestination == NavDestinations.Settings) Icons.Filled.Person else Icons.Outlined.Person,
-                label = "Profile",
-                selected = currentDestination == NavDestinations.Settings,
-                onClick = { onNavigateTo(NavDestinations.Settings) }
-            )
-        }
+        )
+
+        // 3. 设置
+        val isSettingsSelected = currentDestination == NavDestinations.Settings
+        NavigationBarItem(
+            selected = isSettingsSelected,
+            onClick = { onNavigateTo(NavDestinations.Settings) },
+            icon = {
+                Icon(
+                    imageVector = if (isSettingsSelected) Icons.Filled.Settings else Icons.Outlined.Settings,
+                    contentDescription = stringResource(R.string.nav_settings),
+                    modifier = Modifier.size(AppIconDefaults.NavItemSize)
+                )
+            },
+            label = {
+                Text(
+                    text = stringResource(R.string.nav_settings),
+                    style = MaterialTheme.typography.labelMedium
+                )
+            },
+            colors = AppIconDefaults.navItemColors()
+        )
     }
 }
 
-@Composable
-private fun NavItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .width(64.dp)
-            .height(64.dp)
-            .clickable(
-                onClick = onClick,
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = if (selected) Primary else TextSecondary,
-            modifier = Modifier.size(26.dp)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (selected) Primary else TextSecondary,
-            fontSize = 11.sp
-        )
-    }
-}

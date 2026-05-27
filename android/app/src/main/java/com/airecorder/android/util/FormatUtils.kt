@@ -44,6 +44,18 @@ object FormatUtils {
         }
     }
     
+    fun formatShortDate(timestamp: String?): String {
+        if (timestamp.isNullOrBlank()) return "--"
+        return try {
+            val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.getDefault())
+            val outputFormat = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+            val date = inputFormat.parse(timestamp)
+            date?.let { outputFormat.format(it) } ?: "--"
+        } catch (e: Exception) {
+            "--"
+        }
+    }
+    
     fun formatUptime(seconds: Double): String {
         val totalSeconds = seconds.toLong()
         val days = totalSeconds / 86400

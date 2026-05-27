@@ -544,7 +544,11 @@ def get_recording(recording_id: str, session: Session = Depends(get_session)) ->
         .where(TranscriptSegment.recording_id == recording_id)
         .order_by(TranscriptSegment.sequence)
     ).all()
-    summaries = session.exec(select(Summary).where(Summary.recording_id == recording_id)).all()
+    summaries = session.exec(
+        select(Summary)
+        .where(Summary.recording_id == recording_id)
+        .order_by(Summary.created_at.desc())
+    ).all()
     tasks = session.exec(select(Task).where(Task.recording_id == recording_id)).all()
     return {
         "recording": recording,

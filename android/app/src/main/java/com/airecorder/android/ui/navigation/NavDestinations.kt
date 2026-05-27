@@ -7,4 +7,9 @@ sealed class NavDestinations(val route: String) {
     object Detail : NavDestinations("detail/{recordingId}") {
         fun createRoute(recordingId: String) = "detail/$recordingId"
     }
+    
+    companion object {
+        // 获取所有底部导航目标
+        val bottomNavDestinations = listOf(Library, Settings)
+    }
 }

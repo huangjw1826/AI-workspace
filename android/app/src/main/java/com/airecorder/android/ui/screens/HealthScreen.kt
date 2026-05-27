@@ -121,19 +121,6 @@ fun HealthScreen(
                 )
             )
         },
-        bottomBar = {
-            BottomNavigationBar(
-                currentDestination = NavDestinations.Health,
-                onNavigateTo = { dest ->
-                    when (dest) {
-                        NavDestinations.Library -> onNavigateToLibrary()
-                        NavDestinations.Settings -> onNavigateToSettings()
-                        NavDestinations.Health -> {}
-                        NavDestinations.Detail -> {}
-                    }
-                }
-            )
-        },
         containerColor = Background,
         contentWindowInsets = WindowInsets.safeDrawing
     ) { paddingValues ->

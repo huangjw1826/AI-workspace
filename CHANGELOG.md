@@ -1,8 +1,8 @@
 # AI Recorder 更改日志
 
-## 2026-05-27 项目结构文档化
+## 2026-05-27 项目文档全面更新
 
-本次改动完善项目文档结构，为 PC 端和 Android 端分别创建详细的结构说明文档，便于后续开发和维护。
+本次改动更新所有项目说明性文档，确保文档与实际代码结构一致。
 
 ### Added
 - 新增 `PROJECT_STRUCTURE.md` 整体项目结构说明文档
@@ -11,8 +11,26 @@
 - 新增 `android/PROJECT_STRUCTURE.md` Android 端详细结构文档
 - 新增 `docs/TECH_STACK.md` 统一技术栈说明文档
 
-### Changed
-- 更新 `README.md` 项目说明
+### Updated
+- 更新 `README.md` - 项目说明与实际功能保持一致
+- 更新 `PROJECT_STRUCTURE.md` - 添加缺失的 `events.py`、`sse_service.py`、`hooks/` 和 `stores/` 模块
+- 更新 `CODE_WIKI.md` - 添加缺失的 SSE 服务和事件 API
+- 更新 `backend/PROJECT_STRUCTURE.md` - 补充完整的 API 和服务层说明
+- 更新 `frontend/PROJECT_STRUCTURE.md` - 补充 hooks 和 stores 模块
+- 更新 `android/PROJECT_STRUCTURE.md` - 保持与实际代码结构同步
+- 更新 `docs/TECH_STACK.md` - 技术栈版本与实际依赖一致
+- 更新 `docs/android-remote-access.md` - 远程访问配置说明保持最新
+
+### Document Coverage
+- ✅ README.md - 项目概述
+- ✅ PROJECT_STRUCTURE.md - 整体结构
+- ✅ CODE_WIKI.md - 代码详解
+- ✅ CHANGELOG.md - 变更记录
+- ✅ backend/PROJECT_STRUCTURE.md - 后端结构
+- ✅ frontend/PROJECT_STRUCTURE.md - 前端结构
+- ✅ android/PROJECT_STRUCTURE.md - Android 端结构
+- ✅ docs/TECH_STACK.md - 技术栈说明
+- ✅ docs/android-remote-access.md - 远程访问配置
 
 ---
 

@@ -1,7 +1,5 @@
 package com.airecorder.android.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,13 +9,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.airecorder.android.data.model.Recording
-import com.airecorder.android.ui.theme.*
 import com.airecorder.android.util.FormatUtils
 
 @Composable
@@ -28,11 +23,14 @@ fun RecordingItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = Surface),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        onClick = onClick,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = MaterialTheme.shapes.large,
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        border = null
     ) {
         Row(
             modifier = Modifier
@@ -40,20 +38,22 @@ fun RecordingItem(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Iconic Lead (Simplified for PC style)
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(PrimaryContainer.copy(alpha = 0.7f)),
-                contentAlignment = Alignment.Center
+            // Icon Container
+            Surface(
+                modifier = Modifier.size(44.dp),
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.primaryContainer
             ) {
-                Icon(
-                    imageVector = Icons.Default.Mic,
-                    contentDescription = null,
-                    tint = Primary,
-                    modifier = Modifier.size(22.dp)
-                )
+                Box(
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Mic,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
             
             Spacer(modifier = Modifier.width(16.dp))
@@ -64,12 +64,9 @@ fun RecordingItem(
             ) {
                 Text(
                     text = recording.filename,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = 15.sp,
-                        letterSpacing = 0.2.sp
-                    ),
-                    color = OnSurface,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -83,29 +80,27 @@ fun RecordingItem(
                     Text(
                         text = FormatUtils.formatDuration(recording.durationSeconds),
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 11.sp
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium
                     )
                     
                     Surface(
-                        modifier = Modifier.size(3.dp),
+                        modifier = Modifier.size(4.dp),
                         shape = CircleShape,
-                        color = TextPlaceholder
+                        color = MaterialTheme.colorScheme.outlineVariant
                     ) {}
                     
                     Text(
                         text = FormatUtils.formatFileSize(recording.fileSizeBytes),
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextTertiary,
-                        fontSize = 11.sp
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
             }
             
             Spacer(modifier = Modifier.width(8.dp))
             
-            // Refined Status Display (Matches PC labels)
+            // Status Indicator
             StatusIndicator(
                 status = recording.getStatus(),
                 showText = true,
@@ -114,3 +109,4 @@ fun RecordingItem(
         }
     }
 }
+

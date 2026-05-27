@@ -42,7 +42,13 @@ class DetailViewModel @Inject constructor(
     private val _summaryTemplates = MutableStateFlow<List<Map<String, String>>>(emptyList())
     val summaryTemplates: StateFlow<List<Map<String, String>>> = _summaryTemplates.asStateFlow()
     
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+    
+    private var currentRecordingId: String? = null
+    
     fun loadRecording(id: String) {
+        currentRecordingId = id
         viewModelScope.launch {
             _uiState.value = DetailUiState.Loading
             repository.getRecording(id).fold(
@@ -53,6 +59,20 @@ class DetailViewModel @Inject constructor(
                     _uiState.value = DetailUiState.Error(exception.message ?: "Unknown error")
                 }
             )
+        }
+    }
+    
+    fun refreshRecording() {
+        val id = currentRecordingId ?: return
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            repository.getRecording(id).fold(
+                onSuccess = { detail ->
+                    _uiState.value = DetailUiState.Success(detail)
+                },
+                onFailure = { /* Keep current state on refresh failure */ }
+            )
+            _isRefreshing.value = false
         }
     }
     

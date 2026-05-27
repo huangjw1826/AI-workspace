@@ -32,6 +32,7 @@ backend/
 │   ├── api/                          # API 路由层
 │   │   ├── __init__.py
 │   │   ├── auth.py                   # 认证中间件（API Token）
+│   │   ├── events.py                 # 事件订阅 API (SSE)
 │   │   ├── filesystem.py             # 文件系统操作 API
 │   │   ├── health.py                 # 健康检查 API
 │   │   ├── recordings.py             # 录音管理 API
