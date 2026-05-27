@@ -1,4 +1,5 @@
 import React from "react";
+import { BrowserRouter, Routes, Route, useNavigate, useParams, useLocation } from "react-router-dom";
 import { ConfirmDialog, type ConfirmDialogState } from "./components/feedback/ConfirmDialog";
 import { ToastStack, type ToastMessage } from "./components/feedback/ToastStack";
 import { NavBar } from "./components/layout/NavBar";
@@ -64,7 +65,15 @@ const VIEW_TITLES: Record<View, string> = {
 };
 
 export default function App() {
-  const [view, setView] = React.useState<View>("library");
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [view, setView] = React.useState<View>(() => {
+    const path = location.pathname;
+    if (path === "/watch") return "watch";
+    if (path === "/settings") return "settings";
+    if (path === "/health") return "health";
+    return "library";
+  });
   const [detailTab, setDetailTab] = React.useState<DetailTab>("transcript");
   const [health, setHealth] = React.useState<HealthStatus | null>(null);
   const [llmSettings, setLlmSettings] = React.useState<LlmSettings | null>(null);
@@ -87,6 +96,26 @@ export default function App() {
   const [llmTest, setLlmTest] = React.useState<LlmConnectivityResult | null>(null);
   const [confirmDialog, setConfirmDialog] = React.useState<ConfirmDialogState | null>(null);
   const [toasts, setToasts] = React.useState<ToastMessage[]>([]);
+
+  const setViewWithNavigate = React.useCallback(
+    (newView: View) => {
+      setView(newView);
+      switch (newView) {
+        case "watch":
+          navigate("/watch", { replace: true });
+          break;
+        case "settings":
+          navigate("/settings", { replace: true });
+          break;
+        case "health":
+          navigate("/health", { replace: true });
+          break;
+        default:
+          navigate("/", { replace: true });
+      }
+    },
+    [navigate]
+  );
 
   const reloadRecordings = React.useCallback(
     async (query: string, tag: string) => {
@@ -123,6 +152,50 @@ export default function App() {
       setToasts((items) => items.filter((item) => item.id !== id));
     }, 2600);
   }
+
+  React.useEffect(() => {
+    let sseClient: { connect: () => void; disconnect: () => void } | null = null;
+
+    async function initSSE() {
+      const { connectSSE, disconnectSSE, addSSEListener } = await import("./lib/sse");
+      sseClient = { connect: connectSSE, disconnect: disconnectSSE };
+
+      connectSSE();
+
+      const unsubscribe = addSSEListener((event) => {
+        switch (event.event_type) {
+          case "task.started":
+            showToast(`任务开始: ${event.message}`, "info");
+            break;
+          case "task.progress":
+            if (event.progress > 0 && event.progress < 100) {
+              // Skip progress toasts, just update UI
+            }
+            break;
+          case "task.completed":
+            showToast(`任务完成: ${event.message}`, "success");
+            break;
+          case "task.failed":
+            showToast(`任务失败: ${event.message}`, "error");
+            break;
+        }
+      });
+
+      return () => {
+        unsubscribe();
+        disconnectSSE();
+      };
+    }
+
+    const cleanupPromise = initSSE();
+
+    return () => {
+      cleanupPromise.then((cleanup) => cleanup?.());
+      if (sseClient) {
+        sseClient.disconnect();
+      }
+    };
+  }, []);
 
   const refresh = React.useCallback(
     async (selectedId?: string | null) => {
@@ -635,7 +708,7 @@ export default function App() {
         view={view}
         health={health}
         busy={busy}
-        onViewChange={setView}
+        onViewChange={setViewWithNavigate}
         onUpload={handleUpload}
         onRefresh={() => refresh().catch((err) => setError(err.message))}
       />

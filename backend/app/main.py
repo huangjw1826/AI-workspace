@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session
 
 from app.api.auth import LocalBypassTokenMiddleware
+from app.api.events import router as events_router
 from app.api.filesystem import router as filesystem_router
 from app.api.health import router as health_router
 from app.api.recordings import router as recordings_router
@@ -18,6 +19,7 @@ from app.api.transcribe import router as transcribe_router
 from app.api.watch import router as watch_router
 from app.config import get_settings
 from app.db.database import engine, init_db
+from app.middleware.exception_handler import ExceptionHandlerMiddleware
 from app.services.runtime_log import configure_logging
 from app.services.task_service import recover_interrupted_tasks
 from app.services.watch_service import watcher
@@ -53,7 +55,8 @@ def register_frontend_routes(app: FastAPI) -> None:
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="AI Recorder", version="0.1.0")
+    app = FastAPI(title="AI Recorder", version="3.1.0")
+    app.add_middleware(ExceptionHandlerMiddleware)
     app.add_middleware(LocalBypassTokenMiddleware, api_token=settings.api_token)
     app.add_middleware(
         CORSMiddleware,
@@ -62,6 +65,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.include_router(events_router)
     app.include_router(health_router)
     app.include_router(filesystem_router)
     app.include_router(recordings_router)

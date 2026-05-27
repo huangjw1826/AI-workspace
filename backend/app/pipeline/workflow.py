@@ -15,6 +15,16 @@ from app.services.summary_service import SUMMARY_TEMPLATES, SummaryService
 
 logger = get_logger()
 
+_sse_service = None
+
+
+async def _get_sse_service():
+    global _sse_service
+    if _sse_service is None:
+        from app.services.sse_service import get_sse_service as _get_sse
+        _sse_service = await _get_sse()
+    return _sse_service
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -45,6 +55,77 @@ def _finish_cancelled(session: Session, task: Task, recording: Recording | None 
     session.commit()
 
 
+def _run_async_task(coro):
+    """
+    Safely run an async task from a synchronous context.
+    Creates a new event loop if none exists in the current thread.
+    """
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # If there's already a running loop, we need to run in a new thread
+            import threading
+            def run_in_thread():
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                try:
+                    new_loop.run_until_complete(coro)
+                except Exception as e:
+                    logger.exception("Async task failed in background thread", exc_info=e)
+                finally:
+                    new_loop.close()
+            thread = threading.Thread(target=run_in_thread, daemon=True)
+            thread.start()
+        else:
+            try:
+                loop.run_until_complete(coro)
+            except Exception as e:
+                logger.exception("Async task failed", exc_info=e)
+    except RuntimeError:
+        # No event loop exists in current thread, create a new one
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(coro)
+        except Exception as e:
+            logger.exception("Async task failed", exc_info=e)
+        finally:
+            loop.close()
+
+
+async def _emit_task_started(task_id: str, recording_id: str, message: str) -> None:
+    try:
+        service = await _get_sse_service()
+        await service.emit_task_started(task_id, recording_id, message)
+    except Exception:
+        logger.warning("Failed to emit task started event: %s", task_id)
+
+
+async def _emit_task_progress(task_id: str, recording_id: str, progress: int, message: str) -> None:
+    try:
+        service = await _get_sse_service()
+        await service.emit_task_progress(task_id, recording_id, progress, message)
+    except Exception:
+        logger.warning("Failed to emit task progress event: %s", task_id)
+
+
+async def _emit_task_completed(task_id: str, recording_id: str, result_path: str) -> None:
+    try:
+        service = await _get_sse_service()
+        await service.emit_task_completed(task_id, recording_id, result_path)
+    except Exception:
+        logger.warning("Failed to emit task completed event: %s", task_id)
+
+
+async def _emit_task_failed(task_id: str, recording_id: str, error_message: str) -> None:
+    try:
+        service = await _get_sse_service()
+        await service.emit_task_failed(task_id, recording_id, error_message)
+    except Exception:
+        logger.warning("Failed to emit task failed event: %s", task_id)
+
+
 def run_transcription_task(task_id: str) -> None:
     with Session(engine) as session:
         task = session.get(Task, task_id)
@@ -53,6 +134,7 @@ def run_transcription_task(task_id: str) -> None:
         recording = session.get(Recording, task.recording_id)
         if recording is None:
             _update_task(session, task, status="error", error_message="Recording not found")
+            _run_async_task(_emit_task_failed(task_id, "", "Recording not found"))
             return
 
         try:
@@ -60,6 +142,7 @@ def run_transcription_task(task_id: str) -> None:
                 _finish_cancelled(session, task, recording)
                 return
             _update_task(session, task, status="running", progress=10, started_at=_now())
+            _run_async_task(_emit_task_started(task_id, recording.id, "Task started"))
             recording.status = "normalizing"
             recording.updated_at = _now()
             session.add(recording)
@@ -80,11 +163,13 @@ def run_transcription_task(task_id: str) -> None:
             session.add(recording)
             session.commit()
             _update_task(session, task, progress=35)
+            _run_async_task(_emit_task_progress(task_id, recording.id, 35, "Processing audio"))
 
             segments = ASRService().transcribe(normalized)
             if _is_cancelled(session, task):
                 _finish_cancelled(session, task, recording)
                 return
+            _run_async_task(_emit_task_progress(task_id, recording.id, 70, "Transcribing"))
             session.exec(delete(TranscriptSegment).where(TranscriptSegment.recording_id == recording.id))
             for index, segment in enumerate(segments):
                 session.add(
@@ -107,6 +192,7 @@ def run_transcription_task(task_id: str) -> None:
             recording.updated_at = _now()
             session.add(recording)
             session.commit()
+            _run_async_task(_emit_task_completed(task_id, recording.id, str(transcript_path)))
             _update_task(
                 session,
                 task,
@@ -129,6 +215,7 @@ def run_transcription_task(task_id: str) -> None:
                 error_message=str(exc),
                 completed_at=_now(),
             )
+            _run_async_task(_emit_task_failed(task_id, recording.id, str(exc)))
 
 
 def run_summary_task(task_id: str, mode: str = "summary") -> None:
@@ -139,6 +226,7 @@ def run_summary_task(task_id: str, mode: str = "summary") -> None:
         recording = session.get(Recording, task.recording_id)
         if recording is None:
             _update_task(session, task, status="error", error_message="Recording not found")
+            _run_async_task(_emit_task_failed(task_id, "", "Recording not found"))
             return
 
         try:
@@ -146,6 +234,7 @@ def run_summary_task(task_id: str, mode: str = "summary") -> None:
                 _finish_cancelled(session, task, recording)
                 return
             _update_task(session, task, status="running", progress=20, started_at=_now())
+            _run_async_task(_emit_task_started(task_id, recording.id, f"Summary task started ({mode})"))
             segments = session.exec(
                 select(TranscriptSegment)
                 .where(TranscriptSegment.recording_id == recording.id)
@@ -155,6 +244,7 @@ def run_summary_task(task_id: str, mode: str = "summary") -> None:
             if not transcript:
                 raise RuntimeError("Transcript is empty. Run transcription first.")
 
+            _run_async_task(_emit_task_progress(task_id, recording.id, 50, "Generating summary"))
             content = SummaryService().generate(transcript, mode=mode)
             if _is_cancelled(session, task):
                 _finish_cancelled(session, task, recording)
@@ -176,6 +266,7 @@ def run_summary_task(task_id: str, mode: str = "summary") -> None:
             recording.updated_at = _now()
             session.add(recording)
             session.commit()
+            _run_async_task(_emit_task_completed(task_id, recording.id, str(summary_path)))
             _update_task(
                 session,
                 task,
@@ -193,3 +284,4 @@ def run_summary_task(task_id: str, mode: str = "summary") -> None:
                 error_message=str(exc),
                 completed_at=_now(),
             )
+            _run_async_task(_emit_task_failed(task_id, recording.id if recording else "", str(exc)))

@@ -1,6 +1,7 @@
 package com.airecorder.android.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -13,10 +14,25 @@ import com.airecorder.android.ui.screens.SettingsScreen
 
 @Composable
 fun AIRecorderApp(
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
+    initialDeepLink: String? = null
 ) {
     val actions = remember(navController) { AppActions(navController) }
-    
+
+    LaunchedEffect(initialDeepLink) {
+        initialDeepLink?.let { deepLink ->
+            when {
+                deepLink.startsWith("recording/") -> {
+                    val recordingId = deepLink.removePrefix("recording/")
+                    actions.navigateToDetail(recordingId)
+                }
+                deepLink == "settings" -> {
+                    actions.navigateToSettings()
+                }
+            }
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = NavDestinations.Library.route

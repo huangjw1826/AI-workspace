@@ -1,5 +1,6 @@
 package com.airecorder.android
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -15,15 +16,33 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val deepLinkRecordingId = intent?.data?.let { uri ->
+            if (uri.scheme == "airecorder" && uri.host == "recording") {
+                uri.pathSegments.firstOrNull()
+            } else null
+        }
+
+        val deepLinkTarget = when {
+            deepLinkRecordingId != null -> "recording/$deepLinkRecordingId"
+            intent?.data?.toString() == "airecorder://settings" -> "settings"
+            else -> null
+        }
+
         setContent {
             AIRecorderTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AIRecorderApp()
+                    AIRecorderApp(initialDeepLink = deepLinkTarget)
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
     }
 }

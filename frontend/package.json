@@ -9,9 +9,13 @@
     "preview": "vite preview --host 127.0.0.1 --port 5173"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.100.14",
+    "@types/react-router-dom": "^5.3.3",
+    "lucide-react": "^0.487.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "lucide-react": "^0.487.0"
+    "react-router-dom": "^7.15.1",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@types/react": "^19.2.14",

@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --bg: #f5f8fc;
   --surface: #ffffff;
   --surface-soft: #f8fbff;
@@ -434,9 +434,10 @@ button {
 
 .toolbar-row {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(140px, 180px) minmax(118px, 150px) auto auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 180px) minmax(0, 150px) auto auto;
   gap: 10px;
   align-items: center;
+  min-width: 0;
 }
 
 .searchbox {
@@ -448,6 +449,7 @@ button {
   border-radius: 7px;
   background: #ffffff;
   padding: 0 10px;
+  overflow: hidden;
 }
 
 .searchbox input,
@@ -485,9 +487,15 @@ button {
 }
 
 .searchbox input {
+  flex: 1;
+  min-width: 0;
   border: 0;
   outline: 0;
   padding: 0;
+  background: transparent;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .recording-table {
