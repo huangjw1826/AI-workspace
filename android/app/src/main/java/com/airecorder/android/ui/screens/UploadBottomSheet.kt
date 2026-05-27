@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.airecorder.android.R
@@ -110,7 +111,7 @@ fun UploadBottomSheet(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
+                        .weight(1f, fill = false)
                         .heightIn(max = 300.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -136,7 +137,7 @@ fun UploadBottomSheet(
                 Text(stringResource(if (uploadQueue.isEmpty()) R.string.upload_select_file else R.string.upload_select_more))
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
@@ -149,7 +150,7 @@ fun UploadItemCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = SurfaceVariant)
+        colors = CardDefaults.cardColors(containerColor = DividerLight.copy(alpha = 0.5f))
     ) {
         Column(
             modifier = Modifier.padding(12.dp)
@@ -166,25 +167,27 @@ fun UploadItemCard(
                     Icon(
                         imageVector = Icons.Default.Audiotrack,
                         contentDescription = null,
-                        tint = TextSecondary
+                        tint = TextSecondary,
+                        modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = item.fileName,
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 IconButton(
                     onClick = onRemove,
-                    enabled = item.status != UploadStatus.Uploading
+                    enabled = item.status != UploadStatus.Uploading,
+                    modifier = Modifier.size(24.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = null,
-                        tint = TextSecondary
+                        tint = TextTertiary,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -201,7 +204,7 @@ fun UploadItemCard(
                         Text(
                             text = stringResource(R.string.upload_waiting),
                             style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
+                            color = TextTertiary
                         )
                     }
                     UploadStatus.Uploading -> {
@@ -209,7 +212,7 @@ fun UploadItemCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(14.dp),
                                 strokeWidth = 2.dp,
                                 color = Primary
                             )
@@ -228,14 +231,14 @@ fun UploadItemCard(
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = null,
-                                tint = Success,
+                                tint = StatusSuccess,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = stringResource(R.string.upload_success),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Success
+                                color = StatusSuccess
                             )
                         }
                     }
@@ -246,14 +249,14 @@ fun UploadItemCard(
                             Icon(
                                 imageVector = Icons.Default.Error,
                                 contentDescription = null,
-                                tint = Error,
+                                tint = StatusError,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = stringResource(R.string.upload_failed),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Error
+                                color = StatusError
                             )
                         }
                     }
@@ -262,11 +265,13 @@ fun UploadItemCard(
                 if (item.status == UploadStatus.Error) {
                     TextButton(
                         onClick = onRetry,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.height(24.dp)
                     ) {
                         Text(
                             text = stringResource(R.string.upload_retry),
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Primary
                         )
                     }
                 }
@@ -276,8 +281,10 @@ fun UploadItemCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = error,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Error
+                    style = MaterialTheme.typography.labelSmall,
+                    color = StatusError,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

@@ -53,6 +53,8 @@ data class Summary(
     val id: String? = null,
     @SerialName("recording_id")
     val recordingId: String? = null,
+    @SerialName("template_id")
+    val templateId: String? = null,
     val content: String,
     @SerialName("created_at")
     val createdAt: String? = null

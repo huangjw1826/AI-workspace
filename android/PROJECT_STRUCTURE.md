@@ -46,7 +46,9 @@ app/src/main/
 │   ├── ui/                             # UI 层
 │   │   ├── components/                  # 可复用组件
 │   │   │   ├── BottomNavigationBar.kt  # 底部导航栏
-│   │   │   └── RecordingItem.kt        # 录音列表项组件
+│   │   │   ├── RecordingItem.kt        # 录音列表项组件
+│   │   │   ├── StateComponents.kt      # 状态组件（加载、空状态、错误）
+│   │   │   └── StatusIndicator.kt      # 状态指示器组件
 │   │   ├── navigation/                  # 导航配置
 │   │   │   └── NavDestinations.kt      # 导航目标定义
 │   │   ├── screens/                     # 页面
@@ -145,6 +147,14 @@ app/src/main/
 #### 组件 (`components/`)
 - **BottomNavigationBar.kt**：底部导航栏，4 个 Tab
 - **RecordingItem.kt**：录音列表项组件
+- **StateComponents.kt**：状态组件集合
+  - `LoadingState`：加载状态组件
+  - `EmptyState`：空状态组件（含插图和操作按钮）
+  - `ErrorState`：错误状态组件（含重试按钮）
+- **StatusIndicator.kt**：状态指示器组件
+  - `RecordingStatus`：状态枚举（待处理、已转写、已摘要、处理中、失败）
+  - `getStatus()`：根据录音信息判断状态
+  - `StatusIndicator`：状态指示器 UI 组件
 
 #### 主题 (`theme/`)
 - **Color.kt**：颜色定义

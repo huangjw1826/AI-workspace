@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.airecorder.android.data.model.Recording
 import com.airecorder.android.data.repository.RecordingRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,17 +53,45 @@ class LibraryViewModel @Inject constructor(
     private val _isUploading = MutableStateFlow(false)
     val isUploading: StateFlow<Boolean> = _isUploading.asStateFlow()
     
-    fun loadRecordings() {
+    private var pollingJob: Job? = null
+    
+    init {
+        startPolling()
+    }
+    
+    fun loadRecordings(showLoading: Boolean = true) {
         viewModelScope.launch {
-            _uiState.value = LibraryUiState.Loading
+            if (showLoading && _uiState.value !is LibraryUiState.Success) {
+                _uiState.value = LibraryUiState.Loading
+            }
             repository.getRecordings(_searchQuery.value).fold(
                 onSuccess = { result ->
                     _uiState.value = LibraryUiState.Success(result.recordings)
                 },
                 onFailure = { exception ->
-                    _uiState.value = LibraryUiState.Error(exception.message ?: "Unknown error")
+                    if (_uiState.value !is LibraryUiState.Success) {
+                        _uiState.value = LibraryUiState.Error(exception.message ?: "Unknown error")
+                    }
                 }
             )
+        }
+    }
+    
+    private fun startPolling() {
+        pollingJob?.cancel()
+        pollingJob = viewModelScope.launch {
+            while (true) {
+                val currentState = _uiState.value
+                if (currentState is LibraryUiState.Success) {
+                    val hasProcessing = currentState.recordings.any { it.isProcessing }
+                    if (hasProcessing) {
+                        loadRecordings(showLoading = false)
+                    }
+                } else if (currentState is LibraryUiState.Loading || currentState is LibraryUiState.Error) {
+                    loadRecordings(showLoading = false)
+                }
+                delay(5000) // Poll every 5 seconds
+            }
         }
     }
     
@@ -104,7 +134,7 @@ class LibraryViewModel @Inject constructor(
                 onSuccess = { recording ->
                     item.status = UploadStatus.Success
                     _uploadQueue.value = _uploadQueue.value.toList()
-                    loadRecordings()
+                    loadRecordings(showLoading = false)
                 },
                 onFailure = { error ->
                     item.status = UploadStatus.Error
@@ -133,5 +163,10 @@ class LibraryViewModel @Inject constructor(
         _uploadQueue.value = _uploadQueue.value.filter {
             it.status != UploadStatus.Success && it.status != UploadStatus.Error
         }
+    }
+    
+    override fun onCleared() {
+        super.onCleared()
+        pollingJob?.cancel()
     }
 }

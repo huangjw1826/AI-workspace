@@ -1,196 +1,181 @@
 package com.airecorder.android.ui.screens
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.airecorder.android.R
-import com.airecorder.android.ui.components.BottomNavigationBar
+import com.airecorder.android.ui.components.EmptyState
+import com.airecorder.android.ui.components.ErrorState
+import com.airecorder.android.ui.components.LoadingState
 import com.airecorder.android.ui.components.RecordingItem
-import com.airecorder.android.ui.navigation.NavDestinations
-import com.airecorder.android.ui.theme.Background
-import com.airecorder.android.ui.theme.Primary
-import com.airecorder.android.ui.theme.Surface
+import com.airecorder.android.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
     onNavigateToDetail: (String) -> Unit,
-    onNavigateToSettings: () -> Unit,
-    onNavigateToHealth: () -> Unit
+    onNavigateToSettings: () -> Unit
 ) {
     LaunchedEffect(Unit) {
         viewModel.loadRecordings()
     }
-    
+
     val uiState by viewModel.uiState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
-    var searchFieldValue by remember { mutableStateOf(TextFieldValue(searchQuery)) }
     var showUploadSheet by remember { mutableStateOf(false) }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.library_title)) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Surface
-                ),
+                title = {
+                    Text(
+                        text = stringResource(R.string.library_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 actions = {
-                    IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    IconButton(onClick = { showUploadSheet = true }) {
+                        Icon(
+                            imageVector = Icons.Outlined.CloudUpload,
+                            contentDescription = stringResource(R.string.upload),
+                            tint = Primary
+                        )
                     }
-                }
-            )
-        },
-        bottomBar = {
-            BottomNavigationBar(
-                currentDestination = NavDestinations.Library,
-                onNavigateTo = { dest ->
-                    when (dest) {
-                        NavDestinations.Settings -> onNavigateToSettings()
-                        NavDestinations.Health -> onNavigateToHealth()
-                        NavDestinations.Library -> {}
-                        NavDestinations.Detail -> {}
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(
+                            imageVector = Icons.Outlined.Settings,
+                            contentDescription = stringResource(R.string.settings_title),
+                            tint = TextSecondary
+                        )
                     }
-                }
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showUploadSheet = true },
-                containerColor = Primary
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Upload,
-                    contentDescription = stringResource(R.string.upload_select_more),
-                    tint = Surface
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Background,
+                    scrolledContainerColor = Surface
                 )
-            }
+            )
         },
-        containerColor = Background
+        containerColor = Background,
+        contentWindowInsets = WindowInsets.safeDrawing
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .animateContentSize()
         ) {
+            // Search UI
             OutlinedTextField(
-                value = searchFieldValue,
-                onValueChange = { 
-                    searchFieldValue = it
-                    viewModel.onSearchQueryChanged(it.text)
-                },
+                value = searchQuery,
+                onValueChange = { viewModel.onSearchQueryChanged(it) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(10.dp)),
+                    .padding(16.dp),
                 placeholder = { Text(stringResource(R.string.library_search)) },
-                leadingIcon = { 
-                    Icon(Icons.Default.Search, contentDescription = null)
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
+                            Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(18.dp))
+                        }
+                    }
                 },
-                singleLine = true,
-                colors = TextFieldDefaults.colors(
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = Surface,
                     focusedContainerColor = Surface,
-                    unfocusedContainerColor = Surface
-                )
+                    unfocusedBorderColor = DividerLight,
+                    focusedBorderColor = Primary
+                ),
+                singleLine = true
             )
-            
+
             when (val state = uiState) {
                 is LibraryUiState.Loading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
+                    LoadingState(message = stringResource(R.string.loading_recordings))
                 }
                 is LibraryUiState.Success -> {
                     if (state.recordings.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(32.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.FolderOpen,
-                                    contentDescription = null,
+                        EmptyState(
+                            title = stringResource(R.string.library_empty),
+                            subtitle = stringResource(R.string.library_empty_subtitle),
+                            action = {
+                                Button(
+                                    onClick = { showUploadSheet = true },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Primary,
+                                        contentColor = OnPrimary
+                                    ),
+                                    shape = RoundedCornerShape(16.dp),
                                     modifier = Modifier.size(64.dp),
-                                    tint = Primary
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    text = stringResource(R.string.library_empty),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
                             }
-                        }
+                        )
                     } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(vertical = 8.dp)
-                        ) {
-                            items(
-                                items = state.recordings,
-                                key = { it.id }
-                            ) { recording ->
-                                RecordingItem(
-                                    recording = recording,
-                                    onClick = { onNavigateToDetail(recording.id) }
-                                )
-                            }
-                        }
+                        RecordingList(
+                            recordings = state.recordings,
+                            onItemClick = onNavigateToDetail
+                        )
                     }
                 }
                 is LibraryUiState.Error -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ErrorOutline,
-                                contentDescription = null,
-                                modifier = Modifier.size(64.dp),
-                                tint = Primary
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = state.message,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(onClick = { viewModel.refresh() }) {
-                                Text(stringResource(R.string.retry))
-                            }
-                        }
-                    }
+                    ErrorState(
+                        error = state.message,
+                        onRetry = { viewModel.refresh() }
+                    )
                 }
             }
         }
     }
-    
+
     if (showUploadSheet) {
         UploadBottomSheet(
             onDismiss = { showUploadSheet = false }
         )
+    }
+}
+
+@Composable
+private fun RecordingList(
+    recordings: List<com.airecorder.android.data.model.Recording>,
+    onItemClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        items(
+            items = recordings,
+            key = { it.id }
+        ) { recording ->
+            RecordingItem(
+                recording = recording,
+                onClick = { onItemClick(recording.id) }
+            )
+        }
     }
 }

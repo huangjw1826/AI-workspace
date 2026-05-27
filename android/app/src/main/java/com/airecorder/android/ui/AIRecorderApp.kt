@@ -8,7 +8,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.airecorder.android.ui.navigation.NavDestinations
 import com.airecorder.android.ui.screens.DetailScreen
-import com.airecorder.android.ui.screens.HealthScreen
 import com.airecorder.android.ui.screens.LibraryScreen
 import com.airecorder.android.ui.screens.SettingsScreen
 
@@ -25,22 +24,13 @@ fun AIRecorderApp(
         composable(NavDestinations.Library.route) {
             LibraryScreen(
                 onNavigateToDetail = actions.navigateToDetail,
-                onNavigateToSettings = actions.navigateToSettings,
-                onNavigateToHealth = actions.navigateToHealth
+                onNavigateToSettings = actions.navigateToSettings
             )
         }
         composable(NavDestinations.Settings.route) {
             SettingsScreen(
                 onNavigateBack = actions.navigateBack,
-                onNavigateToLibrary = actions.navigateToLibrary,
-                onNavigateToHealth = actions.navigateToHealth
-            )
-        }
-        composable(NavDestinations.Health.route) {
-            HealthScreen(
-                onNavigateBack = actions.navigateBack,
-                onNavigateToLibrary = actions.navigateToLibrary,
-                onNavigateToSettings = actions.navigateToSettings
+                onNavigateToLibrary = actions.navigateToLibrary
             )
         }
         composable(NavDestinations.Detail.route) { backStackEntry ->
@@ -50,7 +40,7 @@ fun AIRecorderApp(
                 onNavigateBack = actions.navigateBack,
                 onNavigateToLibrary = actions.navigateToLibrary,
                 onNavigateToSettings = actions.navigateToSettings,
-                onNavigateToHealth = actions.navigateToHealth
+                onNavigateToHealth = {}
             )
         }
     }
@@ -62,9 +52,6 @@ private class AppActions(navController: NavHostController) {
     }
     val navigateToSettings: () -> Unit = {
         navController.navigate(NavDestinations.Settings.route)
-    }
-    val navigateToHealth: () -> Unit = {
-        navController.navigate(NavDestinations.Health.route)
     }
     val navigateToLibrary: () -> Unit = {
         navController.navigate(NavDestinations.Library.route) {

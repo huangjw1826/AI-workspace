@@ -1,88 +1,93 @@
 package com.airecorder.android.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.HealthAndSafety
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.airecorder.android.R
 import com.airecorder.android.ui.navigation.NavDestinations
 import com.airecorder.android.ui.theme.Primary
-import com.airecorder.android.ui.theme.TextTertiary
-
-data class BottomNavItem(
-    val label: String,
-    val icon: ImageVector,
-    val destination: NavDestinations
-)
+import com.airecorder.android.ui.theme.TextSecondary
+import com.airecorder.android.ui.theme.Surface
 
 @Composable
 fun BottomNavigationBar(
     currentDestination: NavDestinations,
     onNavigateTo: (NavDestinations) -> Unit
 ) {
-    val items = listOf(
-        BottomNavItem(
-            label = stringResource(R.string.nav_library),
-            icon = Icons.Default.Folder,
-            destination = NavDestinations.Library
-        ),
-        BottomNavItem(
-            label = stringResource(R.string.nav_settings),
-            icon = Icons.Default.Settings,
-            destination = NavDestinations.Settings
-        ),
-        BottomNavItem(
-            label = stringResource(R.string.nav_health),
-            icon = Icons.Default.HealthAndSafety,
-            destination = NavDestinations.Health
-        )
-    )
-    
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 8.dp),
-        horizontalArrangement = Arrangement.SpaceAround
+    Surface(
+        color = Surface,
+        tonalElevation = 0.dp,
+        modifier = Modifier.fillMaxWidth().height(80.dp)
     ) {
-        items.forEach { item ->
-            val isSelected = currentDestination == item.destination
-            NavigationBarItem(
-                selected = isSelected,
-                onClick = { onNavigateTo(item.destination) },
-                icon = {
-                    Icon(
-                        imageVector = item.icon,
-                        contentDescription = item.label,
-                        tint = if (isSelected) Primary else TextTertiary
-                    )
-                },
-                label = {
-                    Text(
-                        text = item.label,
-                        color = if (isSelected) Primary else TextTertiary,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            NavItem(
+                icon = if (currentDestination == NavDestinations.Library) Icons.Filled.Home else Icons.Outlined.Home,
+                label = "Home",
+                selected = currentDestination == NavDestinations.Library,
+                onClick = { onNavigateTo(NavDestinations.Library) }
+            )
+            NavItem(
+                icon = if (currentDestination == NavDestinations.Health) Icons.Filled.MonitorHeart else Icons.Outlined.MonitorHeart,
+                label = "Health",
+                selected = currentDestination == NavDestinations.Health,
+                onClick = { onNavigateTo(NavDestinations.Health) }
+            )
+            NavItem(
+                icon = if (currentDestination == NavDestinations.Settings) Icons.Filled.Person else Icons.Outlined.Person,
+                label = "Profile",
+                selected = currentDestination == NavDestinations.Settings,
+                onClick = { onNavigateTo(NavDestinations.Settings) }
             )
         }
+    }
+}
+
+@Composable
+private fun NavItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(64.dp)
+            .height(64.dp)
+            .clickable(
+                onClick = onClick,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (selected) Primary else TextSecondary,
+            modifier = Modifier.size(26.dp)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) Primary else TextSecondary,
+            fontSize = 11.sp
+        )
     }
 }
