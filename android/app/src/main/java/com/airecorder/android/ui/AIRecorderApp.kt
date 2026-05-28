@@ -16,6 +16,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.airecorder.android.data.model.Summary
 import com.airecorder.android.ui.animation.PageTransitions
 import com.airecorder.android.ui.components.BottomNavigationBar
 import com.airecorder.android.ui.components.ToastContainer
@@ -25,7 +26,9 @@ import com.airecorder.android.ui.screens.DetailScreen
 import com.airecorder.android.ui.screens.LibraryScreen
 import com.airecorder.android.ui.screens.SettingsScreen
 import com.airecorder.android.ui.screens.UploadBottomSheet
+import com.airecorder.android.ui.screens.detail.SummaryDetailScreen
 import com.airecorder.android.ui.screens.watch.WatchScreen
+import kotlinx.serialization.json.Json
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
@@ -84,11 +87,11 @@ fun AIRecorderApp(
                     onNavigateTo = { dest ->
                         when (dest) {
                             NavDestinations.Library -> actions.navigateToLibrary()
+                            NavDestinations.Watch -> actions.navigateToWatch()
                             NavDestinations.Settings -> actions.navigateToSettings()
                             else -> {}
                         }
-                    },
-                    onUploadClick = { showUploadSheet = true }
+                    }
                 )
             }
         },
@@ -113,7 +116,8 @@ fun AIRecorderApp(
                     popExitTransition = { PageTransitions.popExitTransition }
                 ) {
                     LibraryScreen(
-                        onNavigateToDetail = actions.navigateToDetail
+                        onNavigateToDetail = actions.navigateToDetail,
+                        onUploadClick = { showUploadSheet = true }
                     )
                 }
                 composable(
@@ -140,7 +144,7 @@ fun AIRecorderApp(
                     )
                 }
                 composable(
-                    route = NavDestinations.Detail.route,
+                    route = NavDestinations.Detail.ROUTE_TEMPLATE,
                     enterTransition = { PageTransitions.enterTransition },
                     exitTransition = { PageTransitions.exitTransition },
                     popEnterTransition = { PageTransitions.popEnterTransition },
@@ -150,9 +154,35 @@ fun AIRecorderApp(
                     DetailScreen(
                         recordingId = recordingId,
                         onNavigateBack = actions.navigateBack,
+                        onNavigateToSummaryDetail = actions.navigateToSummaryDetail,
                         onNavigateToLibrary = actions.navigateToLibrary,
                         onNavigateToSettings = actions.navigateToSettings
                     )
+                }
+                composable(
+                    route = NavDestinations.SummaryDetail.ROUTE_TEMPLATE,
+                    enterTransition = { PageTransitions.enterTransition },
+                    exitTransition = { PageTransitions.exitTransition },
+                    popEnterTransition = { PageTransitions.popEnterTransition },
+                    popExitTransition = { PageTransitions.popExitTransition }
+                ) { backStackEntry ->
+                    val summaryJson = backStackEntry.arguments?.getString("summaryJson") ?: ""
+                    val summary = try {
+                        val decodedBytes = android.util.Base64.decode(summaryJson, android.util.Base64.URL_SAFE)
+                        val decodedJson = String(decodedBytes, Charsets.UTF_8)
+                        Json.decodeFromString<Summary>(decodedJson)
+                    } catch (_: Exception) {
+                        null
+                    }
+                    
+                    if (summary != null) {
+                        SummaryDetailScreen(
+                            summary = summary,
+                            onBack = actions.navigateBack,
+                            onDelete = { /* 后续实现删除逻辑 */ },
+                            onExport = { /* 后续实现导出逻辑 */ }
+                        )
+                    }
                 }
             }
         }
@@ -168,6 +198,10 @@ fun AIRecorderApp(
 private class AppActions(navController: NavHostController) {
     val navigateToDetail: (String) -> Unit = { recordingId ->
         navController.navigate(NavDestinations.Detail.createRoute(recordingId))
+    }
+    
+    val navigateToSummaryDetail: (Summary) -> Unit = { summary ->
+        navController.navigate(NavDestinations.SummaryDetail.createRoute(summary))
     }
     
     val navigateToWatch: () -> Unit = {

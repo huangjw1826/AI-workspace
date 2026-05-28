@@ -95,7 +95,7 @@ data class TranscriptSegment(
     @SerialName("end_time")
     val endTime: Double? = null,
     val speaker: String? = null,
-    val text: String,
+    val text: String = "",
     val sequence: Int? = null
 )
 
@@ -105,7 +105,7 @@ data class Summary(
     @SerialName("recording_id")
     val recordingId: String? = null,
     val mode: String? = null,
-    val content: String,
+    val content: String = "",
     @SerialName("created_at")
     val createdAt: String? = null
 )

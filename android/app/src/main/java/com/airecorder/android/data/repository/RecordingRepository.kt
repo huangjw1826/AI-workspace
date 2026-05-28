@@ -1,8 +1,13 @@
 package com.airecorder.android.data.repository
 
+import com.airecorder.android.data.local.AudioCacheManager
 import com.airecorder.android.data.model.*
 import com.airecorder.android.data.remote.ApiService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -12,13 +17,98 @@ import javax.inject.Singleton
 
 @Singleton
 class RecordingRepository @Inject constructor(
-    private val apiService: ApiService
+    private val apiService: ApiService,
+    private val cacheManager: AudioCacheManager
 ) {
     
-    suspend fun getRecordings(query: String = "", tag: String = ""): Result<SearchResult> =
+    fun isAudioCached(id: String): Boolean = cacheManager.isCached(id)
+    
+    fun getCachedAudioFile(id: String): File? = cacheManager.getCachedPath(id)
+
+    fun downloadAudio(id: String, format: String, startByte: Long = 0L): Flow<DownloadStatus> = flow {
+        emit(DownloadStatus.Started)
+        
+        val range = if (startByte > 0) "bytes=$startByte-" else null
+        val response = apiService.downloadAudio(id, range)
+        if (!response.isSuccessful) {
+            emit(DownloadStatus.Error("服务器返回错误: ${response.code()}"))
+            return@flow
+        }
+        
+        val body = response.body()
+        if (body == null) {
+            emit(DownloadStatus.Error("响应体为空"))
+            return@flow
+        }
+        
+        val contentLength = body.contentLength()
+        val totalLength = if (startByte > 0) contentLength + startByte else contentLength
+        val file = cacheManager.getCacheFile(id, format)
+        val tempFile = File(file.absolutePath + ".tmp")
+        
+        try {
+            body.byteStream().use { inputStream ->
+                java.io.FileOutputStream(tempFile, startByte > 0).use { outputStream ->
+                    val buffer = ByteArray(64 * 1024)
+                    var bytesRead: Int
+                    var totalBytesRead = startByte
+                    var lastEmitTime = 0L
+                    
+                    // Emit initial progress
+                    emit(DownloadStatus.Progress(if (totalLength > 0) totalBytesRead.toFloat() / totalLength else 0f, totalBytesRead, totalLength))
+                    
+                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        outputStream.write(buffer, 0, bytesRead)
+                        totalBytesRead += bytesRead
+                        
+                        val currentTime = System.currentTimeMillis()
+                        if (currentTime - lastEmitTime > 200) { // Throttle to 5Hz
+                            val progress = if (totalLength > 0) totalBytesRead.toFloat() / totalLength else 0f
+                            emit(DownloadStatus.Progress(progress, totalBytesRead, totalLength))
+                            lastEmitTime = currentTime
+                        }
+                    }
+                }
+            }
+            if (tempFile.renameTo(file)) {
+                emit(DownloadStatus.Success(file))
+            } else {
+                emit(DownloadStatus.Error("保存文件失败"))
+            }
+        } catch (e: Exception) {
+            throw e
+        }
+    }.catch { e ->
+        emit(DownloadStatus.Error("下载异常: ${e.localizedMessage}"))
+    }.flowOn(Dispatchers.IO)
+
+    fun clearAudioCache(id: String) {
+        cacheManager.clearCache(id)
+    }
+    
+    fun getTempFileSize(id: String, format: String): Long {
+        val file = cacheManager.getCacheFile(id, format)
+        val tempFile = File(file.absolutePath + ".tmp")
+        return if (tempFile.exists()) tempFile.length() else 0L
+    }
+
+    fun deleteTempFile(id: String, format: String) {
+        val file = cacheManager.getCacheFile(id, format)
+        val tempFile = File(file.absolutePath + ".tmp")
+        if (tempFile.exists()) tempFile.delete()
+    }
+
+    sealed class DownloadStatus {
+        object Started : DownloadStatus()
+        data class Progress(val progress: Float, val downloaded: Long, val total: Long) : DownloadStatus()
+        data class Success(val file: File) : DownloadStatus()
+        data class Error(val message: String) : DownloadStatus()
+    }
+    
+    suspend fun getRecordings(query: String = ""): Result<SearchResult> =
         withContext(Dispatchers.IO) {
             try {
-                val response = apiService.getRecordings(query, tag)
+                val response = apiService.getRecordings(query)
                 if (response.isSuccessful && response.body() != null) {
                     Result.success(response.body()!!)
                 } else {

@@ -3,8 +3,6 @@ package com.airecorder.android.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Error
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -18,25 +16,23 @@ import com.airecorder.android.ui.theme.DividerLight
 import com.airecorder.android.ui.theme.TextSecondary
 import com.airecorder.android.ui.theme.TextTertiary
 import com.halilibo.richtext.markdown.Markdown
-import com.halilibo.richtext.ui.RichText
-import com.halilibo.richtext.ui.RichTextStyle
-import com.halilibo.richtext.ui.material3.RichTextMaterial3
-import com.halilibo.richtext.ui.string.RichTextStringStyle
+import com.halilibo.richtext.ui.material3.RichText
 
 @Composable
 fun MarkdownContent(
     content: String,
     modifier: Modifier = Modifier
 ) {
-    RichText(
-        modifier = modifier,
-        style = RichTextMaterial3(
-            stringStyle = RichTextStringStyle(
-                linkColor = MaterialTheme.colorScheme.primary
-            )
-        )
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(8.dp)
     ) {
-        Markdown(content)
+        Column(modifier = Modifier.padding(12.dp)) {
+            RichText {
+                Markdown(content = content)
+            }
+        }
     }
 }
 

@@ -16,23 +16,29 @@ object AudioUtils {
     }
     
     fun formatFileSize(bytes: Long): String {
+        if (bytes <= 0) return if (bytes == 0L) "0 B" else "--"
         return when {
             bytes < 1024 -> "$bytes B"
-            bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+            bytes < 1024 * 1024 -> String.format("%.1f KB", bytes / 1024.0)
             bytes < 1024 * 1024 * 1024 -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
             else -> String.format("%.1f GB", bytes / (1024.0 * 1024.0 * 1024.0))
         }
     }
     
     fun formatProgress(downloaded: Long, total: Long): String {
-        return "${formatFileSize(downloaded)} / ${formatFileSize(total)}"
+        val totalStr = if (total > 0) formatFileSize(total) else "未知大小"
+        return "${formatFileSize(downloaded)} / $totalStr"
     }
     
     fun getSummaryDisplayTitle(mode: String?): String {
         return when (mode) {
-            "structured_summary" -> "结构化摘要"
+            "structured_summary", "summary" -> "结构化摘要"
             "meeting_minutes" -> "会议纪要"
-            "todo_extraction" -> "待办事项提取"
+            "action_items", "todo_extraction" -> "待办事项"
+            "decisions_risks" -> "决策与风险"
+            "executive_brief" -> "管理层简报"
+            "polished_transcript" -> "转写内容规整"
+            "transcript" -> "全文转写"
             else -> mode ?: "摘要"
         }
     }

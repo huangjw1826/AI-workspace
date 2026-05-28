@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -56,22 +57,10 @@ class PreferencesManager @Inject constructor(
     }
     
     suspend fun getServerUrl(): String {
-        return context.dataStore.data.map { 
-            it[PreferencesKeys.SERVER_URL] ?: ""
-        }.let { flow ->
-            var result = ""
-            flow.collect { result = it }
-            result
-        }
+        return serverUrl.first()
     }
     
     suspend fun getApiToken(): String {
-        return context.dataStore.data.map { 
-            it[PreferencesKeys.API_TOKEN] ?: ""
-        }.let { flow ->
-            var result = ""
-            flow.collect { result = it }
-            result
-        }
+        return apiToken.first()
     }
 }

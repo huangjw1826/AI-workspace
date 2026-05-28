@@ -16,7 +16,6 @@ import androidx.compose.ui.unit.dp
 import com.airecorder.android.data.model.Summary
 import com.airecorder.android.ui.components.EmptyContentCard
 import com.airecorder.android.ui.components.SummaryListItem
-import com.airecorder.android.util.AudioUtils
 
 @Composable
 fun SummaryTab(
@@ -24,7 +23,7 @@ fun SummaryTab(
     isSummarizing: Boolean,
     onSummaryClick: (Summary) -> Unit,
     onGenerateNew: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val sortedSummaries = summaries.sortedByDescending { 
         it.createdAt?.let { timestamp ->
@@ -45,7 +44,7 @@ fun SummaryTab(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (isSummarizing) {
                     item {
@@ -120,10 +119,11 @@ fun EmptyState(
 fun ProcessingBanner() {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),

@@ -36,11 +36,20 @@ fun SummaryDetailScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = AudioUtils.getSummaryDisplayTitle(summary.mode),
-                        maxLines = 1,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Column {
+                        Text(
+                            text = AudioUtils.getSummaryDisplayTitle(summary.mode),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (summary.createdAt != null) {
+                            Text(
+                                text = "${FormatUtils.formatShortDate(summary.createdAt)} · 约 ${summary.content.length} 字",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -131,14 +140,14 @@ fun SummaryHeader(
             
             if (summary.createdAt != null) {
                 Text(
-                    text = FormatUtils.formatDate(summary.createdAt),
+                    text = "生成时间：${FormatUtils.formatDate(summary.createdAt)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             
             Text(
-                text = "${summary.content.length} 字符",
+                text = "内容字数：${summary.content.length} 字",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline
             )

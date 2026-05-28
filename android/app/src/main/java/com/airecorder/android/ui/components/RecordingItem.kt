@@ -1,6 +1,8 @@
 package com.airecorder.android.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,6 +21,7 @@ import com.airecorder.android.data.model.Recording
 import com.airecorder.android.ui.theme.*
 import com.airecorder.android.util.FormatUtils
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RecordingItem(
     recording: Recording,
@@ -37,9 +40,11 @@ fun RecordingItem(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        onClick = if (isSelectionMode) onLongClick else onClick,
-        onLongClick = onLongClick,
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .combinedClickable(
+                onClick = if (isSelectionMode) onLongClick else onClick,
+                onLongClick = onLongClick
+            ),
         colors = CardDefaults.cardColors(
             containerColor = cardColor
         ),

@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ActiveFilterTags(
     selectedStatuses: Set<String>,
@@ -37,7 +38,8 @@ fun ActiveFilterTags(
         ) {
             selectedStatuses.forEach { status ->
                 val label = statusFilters.find { it.id == status }?.label ?: status
-                SuggestionChip(
+                InputChip(
+                    selected = true,
                     onClick = { onRemoveStatus(status) },
                     label = { Text(label) },
                     trailingIcon = {
@@ -52,7 +54,8 @@ fun ActiveFilterTags(
             
             selectedSource?.let { source ->
                 val label = sourceFilters.find { it.id == source }?.label ?: source
-                SuggestionChip(
+                InputChip(
+                    selected = true,
                     onClick = { onRemoveSource() },
                     label = { Text(label) },
                     trailingIcon = {

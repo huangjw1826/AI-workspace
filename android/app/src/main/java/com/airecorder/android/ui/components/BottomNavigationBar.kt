@@ -27,24 +27,20 @@ private data class BottomNavItem(
 @Composable
 fun BottomNavigationBar(
     currentDestination: NavDestinations,
-    onNavigateTo: (NavDestinations) -> Unit,
-    onUploadClick: () -> Unit
+    onNavigateTo: (NavDestinations) -> Unit
 ) {
-    val leftItems = listOf(
-        BottomNavItem(
-            destination = NavDestinations.Library,
-            selectedIcon = Icons.Filled.Folder,
-            unselectedIcon = Icons.Outlined.Folder,
-            label = stringResource(R.string.nav_library)
-        )
-    )
-    
-    val rightItems = listOf(
+    val navItems = listOf(
         BottomNavItem(
             destination = NavDestinations.Watch,
             selectedIcon = Icons.Filled.Visibility,
             unselectedIcon = Icons.Outlined.Visibility,
             label = "监控"
+        ),
+        BottomNavItem(
+            destination = NavDestinations.Library,
+            selectedIcon = Icons.Filled.Folder,
+            unselectedIcon = Icons.Outlined.Folder,
+            label = stringResource(R.string.nav_library)
         ),
         BottomNavItem(
             destination = NavDestinations.Settings,
@@ -61,65 +57,7 @@ fun BottomNavigationBar(
             .fillMaxWidth()
             .navigationBarsPadding()
     ) {
-        leftItems.forEach { item ->
-            val isSelected = currentDestination == item.destination
-            NavigationBarItem(
-                selected = isSelected,
-                onClick = { onNavigateTo(item.destination) },
-                icon = {
-                    Icon(
-                        imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
-                        contentDescription = item.label,
-                        modifier = Modifier.size(AppIconDefaults.NavItemSize)
-                    )
-                },
-                label = {
-                    Text(
-                        text = item.label,
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                },
-                colors = AppIconDefaults.navItemColors()
-            )
-        }
-        
-        NavigationBarItem(
-            selected = false,
-            onClick = onUploadClick,
-            icon = {
-                Surface(
-                    shape = androidx.compose.foundation.shape.CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(48.dp),
-                    shadowElevation = 4.dp
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = stringResource(R.string.upload),
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                }
-            },
-            label = {
-                Text(
-                    text = stringResource(R.string.upload),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            alwaysShowLabel = true,
-            colors = NavigationBarItemDefaults.colors(
-                indicatorColor = Color.Transparent
-            )
-        )
-        
-        rightItems.forEach { item ->
+        navItems.forEach { item ->
             val isSelected = currentDestination == item.destination
             NavigationBarItem(
                 selected = isSelected,

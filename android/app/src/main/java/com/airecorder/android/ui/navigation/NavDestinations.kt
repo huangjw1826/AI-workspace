@@ -22,6 +22,7 @@ sealed class NavDestinations(val route: String) {
     @Serializable
     data class Detail(val recordingId: String) : NavDestinations("detail/$recordingId") {
         companion object {
+            const val ROUTE_TEMPLATE = "detail/{recordingId}"
             fun createRoute(recordingId: String) = "detail/$recordingId"
         }
     }
@@ -29,9 +30,14 @@ sealed class NavDestinations(val route: String) {
     @Serializable
     data class SummaryDetail(val summaryJson: String) : NavDestinations("summaryDetail/$summaryJson") {
         companion object {
+            const val ROUTE_TEMPLATE = "summaryDetail/{summaryJson}"
             fun createRoute(summary: Summary): String {
                 val json = Json.encodeToString(summary)
-                return "summaryDetail/$json"
+                val encodedJson = android.util.Base64.encodeToString(
+                    json.toByteArray(Charsets.UTF_8),
+                    android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP
+                )
+                return "summaryDetail/$encodedJson"
             }
         }
     }

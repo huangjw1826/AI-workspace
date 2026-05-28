@@ -232,7 +232,7 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch {
             val selectedIds = _selectedRecordingIds.value
             selectedIds.forEach { id ->
-                repository.startTranscription(id)
+                repository.transcribe(id)
             }
             deselectAllRecordings()
             loadRecordings(showLoading = false)
@@ -243,7 +243,7 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch {
             val selectedIds = _selectedRecordingIds.value
             selectedIds.forEach { id ->
-                repository.startSummary(id)
+                repository.summarize(id)
             }
             deselectAllRecordings()
             loadRecordings(showLoading = false)

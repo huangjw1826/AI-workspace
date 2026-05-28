@@ -32,28 +32,58 @@ object FormatUtils {
         }
     }
     
-    fun formatDate(timestamp: String?): String {
-        if (timestamp.isNullOrBlank()) return "--"
-        return try {
-            val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.getDefault())
-            val outputFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-            val date = inputFormat.parse(timestamp)
-            date?.let { outputFormat.format(it) } ?: "--"
-        } catch (e: Exception) {
-            "--"
+    private fun parseIsoTimestamp(timestamp: String?): Date? {
+        if (timestamp.isNullOrBlank()) return null
+        
+        // Handle common formats manually if SimpleDateFormat fails
+        val cleaned = timestamp.replace("Z", "+0000")
+            .replace("T", " ")
+            .split(".")[0] // Ignore nanoseconds
+        
+        val formats = arrayOf(
+            "yyyy-MM-dd HH:mm:ssZ",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm",
+            "yyyy-MM-dd"
+        )
+        
+        for (format in formats) {
+            try {
+                val sdf = SimpleDateFormat(format, Locale.getDefault())
+                return sdf.parse(cleaned)
+            } catch (e: Exception) {
+                // Try next
+            }
         }
+        
+        // Last resort: try the original string with multiple formats
+        val originalFormats = arrayOf(
+            "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+            "yyyy-MM-dd'T'HH:mm:ssXXX"
+        )
+        for (format in originalFormats) {
+            try {
+                val sdf = SimpleDateFormat(format, Locale.getDefault())
+                return sdf.parse(timestamp)
+            } catch (e: Exception) { }
+        }
+
+        return null
     }
     
+    fun formatDate(timestamp: String?): String {
+        val date = parseIsoTimestamp(timestamp) ?: return "--"
+        val outputFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        return outputFormat.format(date)
+    }
+
+    fun formatDateTime(timestamp: String?): String = formatDate(timestamp)
+    
     fun formatShortDate(timestamp: String?): String {
-        if (timestamp.isNullOrBlank()) return "--"
-        return try {
-            val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.getDefault())
-            val outputFormat = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
-            val date = inputFormat.parse(timestamp)
-            date?.let { outputFormat.format(it) } ?: "--"
-        } catch (e: Exception) {
-            "--"
-        }
+        val date = parseIsoTimestamp(timestamp) ?: return "--"
+        val outputFormat = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+        return outputFormat.format(date)
     }
     
     fun formatUptime(seconds: Double): String {

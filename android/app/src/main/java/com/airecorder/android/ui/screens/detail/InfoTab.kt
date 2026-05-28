@@ -1,5 +1,6 @@
 package com.airecorder.android.ui.screens.detail
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -8,16 +9,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Label
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.airecorder.android.data.model.Recording
-import com.airecorder.android.ui.theme.StatusSuccess
 import com.airecorder.android.util.AudioUtils
 import com.airecorder.android.util.FormatUtils
 
@@ -36,8 +36,6 @@ fun InfoTab(
         BasicInfoCard(recording = recording)
         
         StatusCard(recording = recording)
-        
-        TagsCard(tags = recording.tags)
     }
 }
 
@@ -194,71 +192,6 @@ fun StatusCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline
                 )
-            }
-        }
-    }
-}
-
-@Composable
-fun TagsCard(
-    tags: String?,
-    modifier: Modifier = Modifier
-) {
-    val tagList = tags?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
-    
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Label,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.secondary
-                )
-                Text(
-                    text = "标签",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            
-            if (tagList.isEmpty()) {
-                Text(
-                    text = "暂无标签",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.outline
-                )
-            } else {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    tagList.forEach { tag ->
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(
-                                text = tag,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    }
-                }
             }
         }
     }

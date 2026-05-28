@@ -1,5 +1,6 @@
 package com.airecorder.android.ui.screens
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -8,9 +9,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -23,7 +27,8 @@ import com.airecorder.android.ui.theme.*
 @Composable
 fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
-    onNavigateToDetail: (String) -> Unit
+    onNavigateToDetail: (String) -> Unit,
+    onUploadClick: () -> Unit
 ) {
     LaunchedEffect(Unit) {
         viewModel.loadRecordings()
@@ -36,6 +41,8 @@ fun LibraryScreen(
     val sortOption by viewModel.sortOption.collectAsState()
     val selectedRecordingIds by viewModel.selectedRecordingIds.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    
+    var isSearchExpanded by remember { mutableStateOf(false) }
     
     val isSelectionMode = selectedRecordingIds.isNotEmpty()
     
@@ -57,6 +64,22 @@ fun LibraryScreen(
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
+                    },
+                    actions = {
+                        IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
+                            Icon(
+                                imageVector = if (isSearchExpanded) Icons.Default.FilterListOff else Icons.Default.FilterList,
+                                contentDescription = "搜索与筛选",
+                                tint = if (isSearchExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        IconButton(onClick = onUploadClick) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "上传音频",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Background,
@@ -91,6 +114,7 @@ fun LibraryScreen(
                             selectedRecordingIds = selectedRecordingIds,
                             isRefreshing = isRefreshing,
                             isSelectionMode = isSelectionMode,
+                            isSearchExpanded = isSearchExpanded,
                             onSearchQueryChanged = { viewModel.onSearchQueryChanged(it) },
                             onStatusToggle = { viewModel.toggleStatusFilter(it) },
                             onSourceSelect = { viewModel.setSourceFilter(it) },
@@ -125,6 +149,7 @@ private fun ContentView(
     selectedRecordingIds: Set<String>,
     isRefreshing: Boolean,
     isSelectionMode: Boolean,
+    isSearchExpanded: Boolean,
     onSearchQueryChanged: (String) -> Unit,
     onStatusToggle: (String) -> Unit,
     onSourceSelect: (String?) -> Unit,
@@ -141,24 +166,28 @@ private fun ContentView(
     ) {
         MetricCardsRow(recordings = recordings)
         
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        SearchBar(
-            query = searchQuery,
-            onQueryChange = onSearchQueryChanged,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        FilterChips(
-            selectedStatuses = selectedStatuses,
-            onStatusToggle = onStatusToggle,
-            selectedSource = selectedSource,
-            onSourceSelect = onSourceSelect,
-            sortOption = sortOption,
-            onSortSelect = onSortSelect
-        )
+        if (isSearchExpanded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize()
+            ) {
+                SearchBar(
+                    query = searchQuery,
+                    onQueryChange = onSearchQueryChanged,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+                
+                FilterChips(
+                    selectedStatuses = selectedStatuses,
+                    onStatusToggle = onStatusToggle,
+                    selectedSource = selectedSource,
+                    onSourceSelect = onSourceSelect,
+                    sortOption = sortOption,
+                    onSortSelect = onSortSelect
+                )
+            }
+        }
         
         ActiveFilterTags(
             selectedStatuses = selectedStatuses,
@@ -237,14 +266,30 @@ private fun RecordingList(
     onRecordingLongClick: (String) -> Unit,
     onRefresh: () -> Unit
 ) {
-    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = onRefresh,
-        modifier = Modifier.fillMaxSize()
+    val pullToRefreshState = rememberPullToRefreshState()
+    
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            onRefresh()
+        }
+    }
+    
+    LaunchedEffect(isRefreshing) {
+        if (isRefreshing) {
+            pullToRefreshState.startRefresh()
+        } else {
+            pullToRefreshState.endRefresh()
+        }
+    }
+    
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .nestedScroll(pullToRefreshState.nestedScrollConnection)
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(vertical = 8.dp),
+            contentPadding = PaddingValues(bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             items(
@@ -259,10 +304,15 @@ private fun RecordingList(
                     onLongClick = { onRecordingLongClick(recording.id) }
                 )
             }
-            
-            item {
-                Spacer(modifier = Modifier.height(80.dp))
-            }
+        }
+        
+        if (pullToRefreshState.progress > 0.01f || isRefreshing) {
+            PullToRefreshContainer(
+                state = pullToRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
@@ -290,7 +340,7 @@ private fun EmptyLibraryView() {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "点击右下角 + 上传音频文件",
+            text = "点击右上角 + 上传音频文件",
             style = MaterialTheme.typography.bodyMedium,
             color = TextTertiary,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center

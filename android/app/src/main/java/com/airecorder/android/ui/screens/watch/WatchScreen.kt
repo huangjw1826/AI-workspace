@@ -20,7 +20,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.airecorder.android.R
 import com.airecorder.android.data.model.WatchEvent
 import com.airecorder.android.ui.theme.*
-import com.airecorder.android.ui.util.FormatUtils
+import com.airecorder.android.util.FormatUtils
 import com.airecorder.android.ui.util.rememberHapticFeedback
 
 @OptIn(ExperimentalMaterial3Api::class)

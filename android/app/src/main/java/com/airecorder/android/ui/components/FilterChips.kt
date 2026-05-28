@@ -1,10 +1,8 @@
 package com.airecorder.android.ui.components
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
@@ -36,6 +34,7 @@ enum class SortOption(val id: String, val label: String) {
     LARGEST("largest", "文件最大")
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FilterChips(
     selectedStatuses: Set<String>,
@@ -49,12 +48,13 @@ fun FilterChips(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             statusFilters.forEach { filter ->
                 FilterChip(
@@ -63,30 +63,19 @@ fun FilterChips(
                     label = { Text(filter.label) }
                 )
             }
-        }
-        
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                sourceFilters.forEach { filter ->
-                    FilterChip(
-                        selected = selectedSource == filter.id,
-                        onClick = { 
-                            if (selectedSource == filter.id) {
-                                onSourceSelect(null)
-                            } else {
-                                onSourceSelect(filter.id)
-                            }
-                        },
-                        label = { Text(filter.label) }
-                    )
-                }
+            
+            sourceFilters.forEach { filter ->
+                FilterChip(
+                    selected = selectedSource == filter.id,
+                    onClick = { 
+                        if (selectedSource == filter.id) {
+                            onSourceSelect(null)
+                        } else {
+                            onSourceSelect(filter.id)
+                        }
+                    },
+                    label = { Text(filter.label) }
+                )
             }
             
             SortDropdown(
@@ -102,7 +91,7 @@ fun SortDropdown(
     sortOption: SortOption,
     onSortSelect: (SortOption) -> Unit
 ) {
-    var expanded by androidx.compose.runtime.mutableStateOf(false)
+    var expanded by remember { mutableStateOf(false) }
     
     Box {
         TextButton(onClick = { expanded = true }) {

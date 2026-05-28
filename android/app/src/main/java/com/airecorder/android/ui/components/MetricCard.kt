@@ -24,7 +24,6 @@ fun MetricCard(
 ) {
     Card(
         modifier = modifier
-            .width(180.dp)
             .animateContentSize(),
         colors = CardDefaults.cardColors(
             containerColor = Surface

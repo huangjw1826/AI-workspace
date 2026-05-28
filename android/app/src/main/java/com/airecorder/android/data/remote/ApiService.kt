@@ -13,8 +13,7 @@ interface ApiService {
     
     @GET("/api/recordings")
     suspend fun getRecordings(
-        @Query("query") query: String = "",
-        @Query("tag") tag: String = ""
+        @Query("query") query: String = ""
     ): Response<SearchResult>
     
     @GET("/api/recordings/{id}")

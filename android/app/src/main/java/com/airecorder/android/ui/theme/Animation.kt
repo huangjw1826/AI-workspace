@@ -20,7 +20,7 @@ object AnimationDurations {
 }
 
 object AnimationEasing {
-    val FastOutSlowInEasing: Easing = FastOutSlowInEasing
-    val FastOutLinearInEasing: Easing = FastOutLinearInEasing
-    val LinearOutSlowInEasing: Easing = LinearOutSlowInEasing
+    val FastOutSlowInEasing: Easing = androidx.compose.animation.core.FastOutSlowInEasing
+    val FastOutLinearInEasing: Easing = androidx.compose.animation.core.FastOutLinearInEasing
+    val LinearOutSlowInEasing: Easing = androidx.compose.animation.core.LinearOutSlowInEasing
 }

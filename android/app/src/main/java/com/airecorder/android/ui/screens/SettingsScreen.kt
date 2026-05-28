@@ -230,114 +230,50 @@ fun SettingsScreen(
             )
         },
         containerColor = Background,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        contentWindowInsets = WindowInsets.safeDrawing
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // --- 1. System Health Sections ---
-            SectionHeader(title = stringResource(R.string.health_title), icon = Icons.Default.MonitorHeart)
-            
-            when (val state = healthState) {
-                is HealthUiState.Loading -> {
-                    Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = Primary)
+            // --- 1. System Health Dashboard ---
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Text(
+                    text = "系统状态",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Primary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 8.dp, bottom = 8.dp, top = 8.dp)
+                )
+                
+                when (val state = healthState) {
+                    is HealthUiState.Loading -> {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Surface),
+                            shape = RoundedCornerShape(24.dp)
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = Primary)
+                            }
+                        }
                     }
-                }
-                is HealthUiState.Success -> {
-                    val data = state.data
-                    
-                    // Health Summary Card
-                    HealthSummaryCard(
-                        isOnline = data.status == "ok",
-                        tunnelConnected = data.tunnel?.connected == true
-                    )
-
-                    // Service Status Details
-                    SettingsSection(
-                        title = stringResource(R.string.service_status),
-                        icon = Icons.Default.Dns
-                    ) {
-                        StatusItem(
-                            title = stringResource(R.string.fastapi_backend),
-                            isGood = data.status == "ok",
-                            statusText = if (data.status == "ok") stringResource(R.string.status_ok) else stringResource(R.string.status_error),
-                            isLast = false
-                        )
-                        StatusItem(
-                            title = stringResource(R.string.cloudflare_tunnel),
-                            isGood = data.tunnel?.connected == true,
-                            statusText = if (data.tunnel?.connected == true) stringResource(R.string.status_connected) else stringResource(R.string.status_disconnected),
-                            isLast = true
-                        )
+                    is HealthUiState.Success -> {
+                        val data = state.data
+                        HealthDashboard(data)
                     }
-
-                    // Engine Status Details
-                    SettingsSection(
-                        title = stringResource(R.string.asr_engine),
-                        icon = Icons.Default.Speaker
-                    ) {
-                        StatusItem(
-                            title = stringResource(R.string.funasr_model),
-                            isGood = data.funasr,
-                            statusText = if (data.funasr) stringResource(R.string.status_loaded) else stringResource(R.string.status_error),
-                            isLast = false
-                        )
-                        StatusItem(
-                            title = stringResource(R.string.ffmpeg),
-                            isGood = data.ffmpeg,
-                            statusText = if (data.ffmpeg) stringResource(R.string.status_installed) else stringResource(R.string.status_error),
-                            isLast = true
-                        )
-                    }
-
-                    // LLM Details
-                    SettingsSection(
-                        title = stringResource(R.string.llm_config_health),
-                        icon = Icons.Default.Psychology
-                    ) {
-                        StatusItem(
-                            title = stringResource(R.string.api_connection),
-                            isGood = data.llmConfigured,
-                            statusText = if (data.llmConfigured) stringResource(R.string.status_ok) else stringResource(R.string.status_error),
-                            isLast = false
-                        )
-                        InfoItem(
-                            title = stringResource(R.string.current_model),
-                            value = data.llmModel ?: stringResource(R.string.na)
-                        )
-                        InfoItem(
-                            title = stringResource(R.string.settings_llm_provider),
-                            value = data.llmProvider ?: stringResource(R.string.na)
-                        )
-                    }
-                }
-                is HealthUiState.Error -> {
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                        colors = CardDefaults.cardColors(containerColor = StatusErrorLight.copy(alpha = 0.3f)),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Text(
-                            text = state.message,
-                            color = StatusError,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(16.dp)
-                        )
+                    is HealthUiState.Error -> {
+                        ErrorCard(message = state.message)
                     }
                 }
             }
 
-            // --- 2. Server Config Section ---
-            SectionHeader(title = stringResource(R.string.settings_server_config), icon = Icons.Default.Settings)
-            SettingsSection(
-                title = "Endpoint Configuration",
-                icon = Icons.Default.NetworkCheck
-            ) {
+            // --- 2. Connection Settings ---
+            SettingsGroup(title = "连接配置") {
                 SettingTextField(
                     value = serverUrl,
                     onValueChange = { viewModel.updateServerUrl(it) },
@@ -354,403 +290,351 @@ fun SettingsScreen(
                     placeholder = "your-api-token"
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ActionButton(
+                        onClick = { viewModel.testConnection() },
+                        icon = Icons.Default.CheckCircle,
+                        text = "测试连接",
+                        isLoading = isTestingConnection,
+                        enabled = !isTestingConnection && serverUrl.isNotBlank() && apiToken.isNotBlank(),
+                        modifier = Modifier.weight(1f)
+                    )
 
-                ActionButton(
-                    onClick = { viewModel.testConnection() },
-                    icon = Icons.Default.CheckCircle,
-                    text = stringResource(R.string.settings_test_connection),
-                    isLoading = isTestingConnection,
-                    enabled = !isTestingConnection && serverUrl.isNotBlank() && apiToken.isNotBlank()
-                )
+                    ActionButton(
+                        onClick = {
+                            scope.launch {
+                                viewModel.saveSettings()
+                                viewModel.loadHealth()
+                                viewModel.loadSettings()
+                            }
+                        },
+                        icon = Icons.Default.Save,
+                        text = "保存配置",
+                        containerColor = Primary,
+                        contentColor = OnPrimary,
+                        enabled = serverUrl.isNotBlank() && apiToken.isNotBlank(),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
 
                 AnimatedVisibility(visible = connectionTestResult != null) {
                     ConnectionResultCard(isSuccess = connectionTestResult == true)
                 }
-
-                ActionButton(
-                    onClick = {
-                        scope.launch {
-                            viewModel.saveSettings()
-                        }
-                    },
-                    icon = Icons.Default.Save,
-                    text = stringResource(R.string.settings_save),
-                    containerColor = Primary,
-                    contentColor = OnPrimary,
-                    enabled = serverUrl.isNotBlank() && apiToken.isNotBlank()
-                )
             }
 
-            // --- 2. LLM Settings ---
-            SectionHeader(title = "LLM 设置", icon = Icons.Default.Psychology)
-            SettingsSection(
-                title = "LLM 配置",
-                icon = Icons.Default.SmartToy
-            ) {
+            // --- 3. Processing Engines (ASR & LLM) ---
+            SettingsGroup(title = "处理引擎") {
+                // LLM Settings
                 when (val state = llmSettingsState) {
-                    is SettingsUiState.Loading -> {
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = Primary
-                            )
-                        }
-                    }
-                    is SettingsUiState.Error -> {
-                        Text(
-                            text = state.message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = StatusError
-                        )
-                    }
                     is SettingsUiState.Success -> {
                         val settings = state.data
-                        StatusItem(
-                            title = "配置状态",
-                            isGood = settings.configured,
-                            statusText = if (settings.configured) "已配置" else "未配置",
-                            isLast = false
+                        SettingsRow(
+                            icon = Icons.Default.Psychology,
+                            title = "LLM 提供商",
+                            value = settings.provider,
+                            status = if (settings.configured) HealthStatus.Good else HealthStatus.Error
                         )
-                        InfoItem(
-                            title = "提供商",
-                            value = settings.provider
-                        )
-                        InfoItem(
-                            title = "模型",
+                        SettingsRow(
+                            icon = Icons.Default.SmartToy,
+                            title = "模型名称",
                             value = settings.model
                         )
-                        InfoItem(
-                            title = "API 密钥",
-                            value = settings.apiKeyMasked ?: "******"
+                    }
+                    else -> {
+                        SettingsRow(
+                            icon = Icons.Default.Psychology,
+                            title = "LLM 设置",
+                            value = "点击刷新查看详情"
                         )
-                        settings.maxCompletionTokens?.let { tokens ->
-                            InfoItem(
-                                title = "最大 Token 数",
-                                value = tokens.toString()
-                            )
-                        }
-                        settings.temperature?.let { temp ->
-                            InfoItem(
-                                title = "温度",
-                                value = temp.toString()
-                            )
-                        }
-                        settings.topP?.let { topP ->
-                            InfoItem(
-                                title = "Top P",
-                                value = topP.toString()
-                            )
-                        }
                     }
                 }
             }
-            
-            // --- 3. Storage Settings ---
-            SectionHeader(title = "存储设置", icon = Icons.Default.Storage)
-            SettingsSection(
-                title = "存储配置",
-                icon = Icons.Default.Folder
-            ) {
+
+            // --- 4. Storage & Monitoring ---
+            SettingsGroup(title = "存储与监控") {
+                // Storage
                 when (val state = storageSettingsState) {
-                    is SettingsUiState.Loading -> {
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = Primary
-                            )
-                        }
-                    }
-                    is SettingsUiState.Error -> {
-                        Text(
-                            text = state.message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = StatusError
-                        )
-                    }
                     is SettingsUiState.Success -> {
                         val settings = state.data
-                        InfoItem(
-                            title = "转录文件目录",
-                            value = settings.transcriptDir
-                        )
-                        StatusItem(
-                            title = "转录目录状态",
-                            isGood = settings.transcriptExists,
-                            statusText = if (settings.transcriptExists) "存在" else "不存在",
-                            isLast = false
-                        )
-                        InfoItem(
-                            title = "摘要文件目录",
-                            value = settings.summaryDir
-                        )
-                        StatusItem(
-                            title = "摘要目录状态",
-                            isGood = settings.summaryExists,
-                            statusText = if (settings.summaryExists) "存在" else "不存在",
-                            isLast = true
+                        SettingsRow(
+                            icon = Icons.Default.Storage,
+                            title = "存储状态",
+                            value = if (settings.transcriptExists) "正常" else "异常",
+                            status = if (settings.transcriptExists) HealthStatus.Good else HealthStatus.Error
                         )
                     }
+                    else -> {}
                 }
-            }
-            
-            // --- 4. Watch Settings ---
-            SectionHeader(title = "监控设置", icon = Icons.Default.Visibility)
-            SettingsSection(
-                title = "目录监控配置",
-                icon = Icons.Default.Visibility
-            ) {
+
+                // Watch
                 when (val state = watchSettingsState) {
-                    is SettingsUiState.Loading -> {
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = Primary
+                    is SettingsUiState.Success -> {
+                        val settings = state.data
+                        SettingsRow(
+                            icon = Icons.Default.Visibility,
+                            title = "监控服务",
+                            value = if (settings.enabled) "已启用" else "已禁用",
+                            status = if (settings.enabled) HealthStatus.Good else HealthStatus.Warning
+                        )
+                        if (settings.enabled) {
+                            SettingsRow(
+                                icon = Icons.Default.Folder,
+                                title = "监控目录",
+                                value = settings.watchDir.split("\\").lastOrNull() ?: settings.watchDir,
+                                subtitle = settings.watchDir
                             )
                         }
                     }
-                    is SettingsUiState.Error -> {
-                        Text(
-                            text = state.message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = StatusError
-                        )
-                    }
-                    is SettingsUiState.Success -> {
-                        val settings = state.data
-                        StatusItem(
-                            title = "监控状态",
-                            isGood = settings.enabled,
-                            statusText = if (settings.enabled) "已启用" else "已禁用",
-                            isLast = false
-                        )
-                        InfoItem(
-                            title = "监控目录",
-                            value = settings.watchDir
-                        )
-                        StatusItem(
-                            title = "目录存在",
-                            isGood = settings.exists,
-                            statusText = if (settings.exists) "存在" else "不存在",
-                            isLast = false
-                        )
-                        StatusItem(
-                            title = "递归监控",
-                            isGood = settings.recursive,
-                            statusText = if (settings.recursive) "是" else "否",
-                            isLast = false
-                        )
-                        InfoItem(
-                            title = "监控间隔",
-                            value = "${settings.intervalSeconds}秒"
-                        )
-                    }
+                    else -> {}
                 }
             }
             
-            // --- 5. About Section ---
-            SettingsSection(
-                title = stringResource(R.string.settings_about),
-                icon = Icons.Default.Info
-            ) {
-                AboutItem(
-                    title = stringResource(R.string.settings_version),
+            // --- 5. About ---
+            SettingsGroup(title = "关于") {
+                SettingsRow(
+                    icon = Icons.Default.Info,
+                    title = "版本",
                     value = "1.0.0"
                 )
-                AboutItem(
-                    title = stringResource(R.string.settings_copyright),
+                SettingsRow(
+                    icon = Icons.Default.Copyright,
+                    title = "版权",
                     value = "AI Recorder"
                 )
             }
-
-            Spacer(modifier = Modifier.height(40.dp))
         }
     }
 }
 
-@Composable
-private fun SectionHeader(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Row(
-        modifier = Modifier.padding(horizontal = 24.dp, vertical = 0.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Icon(imageVector = icon, contentDescription = null, tint = Primary, modifier = Modifier.size(22.dp))
-        Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
-    }
-}
+enum class HealthStatus { Good, Warning, Error, Neutral }
 
 @Composable
-private fun HealthSummaryCard(
-    isOnline: Boolean,
-    tunnelConnected: Boolean
-) {
+private fun HealthDashboard(data: com.airecorder.android.data.model.HealthResponse) {
+    val isOnline = data.status == "ok"
+    
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isOnline) StatusSuccessLight.copy(alpha = 0.5f) else StatusErrorLight.copy(alpha = 0.5f)
-        ),
-        shape = RoundedCornerShape(24.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = if (isOnline) stringResource(R.string.system_online) else stringResource(R.string.system_offline),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isOnline) StatusSuccess else StatusError
-                )
-                Text(
-                    text = if (tunnelConnected) stringResource(R.string.tunnel_connected_hint) else stringResource(R.string.tunnel_disconnected_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
-                )
-            }
-            Surface(
-                color = if (isOnline) StatusSuccess else StatusError,
-                shape = CircleShape,
-                modifier = Modifier.size(40.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = if (isOnline) Icons.Default.CheckCircle else Icons.Default.Error,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingsSection(
-    title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Surface),
         shape = RoundedCornerShape(24.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = 4.dp)
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        color = (if (isOnline) StatusSuccess else StatusError).copy(alpha = 0.1f),
+                        shape = CircleShape,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (isOnline) Icons.Default.CloudDone else Icons.Default.CloudOff,
+                                contentDescription = null,
+                                tint = if (isOnline) StatusSuccess else StatusError,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = if (isOnline) "服务器在线" else "服务器离线",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (isOnline) "所有系统运行正常" else "无法连接到后端服务",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(20.dp))
+            HorizontalDivider(color = DividerLight, thickness = 1.dp)
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Row(modifier = Modifier.fillMaxWidth()) {
+                HealthIndicator(
+                    modifier = Modifier.weight(1f),
+                    label = "ASR 引擎",
+                    isGood = data.funasr,
+                    icon = Icons.Default.Mic
+                )
+                HealthIndicator(
+                    modifier = Modifier.weight(1f),
+                    label = "LLM 配置",
+                    isGood = data.llmConfigured,
+                    icon = Icons.Default.AutoAwesome
+                )
+                HealthIndicator(
+                    modifier = Modifier.weight(1f),
+                    label = "内网穿透",
+                    isGood = data.tunnel?.connected == true,
+                    icon = Icons.Default.Hub
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HealthIndicator(
+    modifier: Modifier = Modifier,
+    label: String,
+    isGood: Boolean,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (isGood) HealthGreen else StatusError,
+            modifier = Modifier.size(20.dp)
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = TextSecondary
+        )
+        Surface(
+            color = if (isGood) HealthGreen else StatusError,
+            shape = CircleShape,
+            modifier = Modifier.size(6.dp)
+        ) {}
+    }
+}
+
+@Composable
+private fun SettingsGroup(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            color = Primary,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Surface),
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                content()
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    value: String? = null,
+    subtitle: String? = null,
+    status: HealthStatus = HealthStatus.Neutral,
+    onClick: (() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.background(Color.Transparent) else Modifier),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            color = Background,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.size(36.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
                     tint = Primary,
                     modifier = Modifier.size(18.dp)
                 )
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = TextSecondary
-                )
             }
-            content()
         }
-    }
-}
-
-@Composable
-private fun StatusItem(
-    title: String,
-    isGood: Boolean,
-    statusText: String,
-    isLast: Boolean = false
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Surface(
-                color = if (isGood) HealthGreen else StatusError,
-                shape = CircleShape,
-                modifier = Modifier.size(8.dp)
-            ) {}
+        
+        Spacer(modifier = Modifier.width(12.dp))
+        
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
+                fontWeight = FontWeight.Medium,
+                color = TextPrimary
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextTertiary,
+                    maxLines = 1
+                )
+            }
+        }
+        
+        if (value != null) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+                modifier = Modifier.padding(end = 8.dp)
             )
         }
-        Text(
-            text = statusText,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = if (isGood) HealthGreen else StatusError
-        )
-    }
-    if (!isLast) {
-        HorizontalDivider(
-            color = DividerLight,
-            thickness = 1.dp,
-            modifier = Modifier.padding(vertical = 4.dp)
-        )
+        
+        if (status != HealthStatus.Neutral) {
+            val color = when (status) {
+                HealthStatus.Good -> HealthGreen
+                HealthStatus.Warning -> StatusWarning
+                HealthStatus.Error -> StatusError
+                else -> Color.Transparent
+            }
+            Surface(
+                color = color,
+                shape = CircleShape,
+                modifier = Modifier.size(8.dp)
+            ) {}
+        }
     }
 }
 
 @Composable
-private fun InfoItem(
-    title: String,
-    value: String
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+private fun ErrorCard(message: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = StatusErrorLight.copy(alpha = 0.2f)),
+        shape = RoundedCornerShape(24.dp)
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold,
-            color = OnSurface
-        )
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = StatusError)
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(text = message, color = StatusError, style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
 
@@ -765,20 +649,21 @@ private fun SettingTextField(
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(label) },
+        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
         placeholder = { Text(placeholder) },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
         leadingIcon = {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = Primary)
         },
         colors = OutlinedTextFieldDefaults.colors(
-            unfocusedBorderColor = DividerLight,
+            unfocusedBorderColor = OutlineVariant,
             focusedBorderColor = Primary,
-            unfocusedContainerColor = Background,
-            focusedContainerColor = Background
+            unfocusedContainerColor = Background.copy(alpha = 0.5f),
+            focusedContainerColor = Background.copy(alpha = 0.5f)
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(16.dp),
+        textStyle = MaterialTheme.typography.bodyMedium
     )
 }
 
@@ -787,6 +672,7 @@ private fun ActionButton(
     onClick: () -> Unit,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     text: String,
+    modifier: Modifier = Modifier,
     isLoading: Boolean = false,
     enabled: Boolean = true,
     containerColor: Color = SecondaryContainer,
@@ -794,7 +680,7 @@ private fun ActionButton(
 ) {
     Button(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().height(48.dp),
+        modifier = modifier.height(48.dp),
         enabled = enabled,
         colors = ButtonDefaults.buttonColors(
             containerColor = containerColor,
@@ -802,7 +688,7 @@ private fun ActionButton(
             disabledContainerColor = DividerLight,
             disabledContentColor = TextTertiary
         ),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
     ) {
         if (isLoading) {
@@ -825,50 +711,29 @@ private fun ActionButton(
 
 @Composable
 private fun ConnectionResultCard(isSuccess: Boolean) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    Surface(
+        color = (if (isSuccess) StatusSuccess else StatusError).copy(alpha = 0.1f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Icon(
-            imageVector = if (isSuccess) Icons.Default.CheckCircle else Icons.Default.Error,
-            contentDescription = null,
-            tint = if (isSuccess) StatusSuccess else StatusError,
-            modifier = Modifier.size(16.dp)
-        )
-        Text(
-            text = if (isSuccess) stringResource(R.string.settings_connection_success) else stringResource(R.string.settings_connection_failed),
-            style = MaterialTheme.typography.bodySmall,
-            color = if (isSuccess) StatusSuccess else StatusError,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
-
-@Composable
-private fun AboutItem(
-    title: String,
-    value: String
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold,
-            color = OnSurface
-        )
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = if (isSuccess) Icons.Default.CheckCircle else Icons.Default.Error,
+                contentDescription = null,
+                tint = if (isSuccess) StatusSuccess else StatusError,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = if (isSuccess) stringResource(R.string.settings_connection_success) else stringResource(R.string.settings_connection_failed),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (isSuccess) StatusSuccess else StatusError,
+                fontWeight = FontWeight.Medium
+            )
+        }
     }
 }

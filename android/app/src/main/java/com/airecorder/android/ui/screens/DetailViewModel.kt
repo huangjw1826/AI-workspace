@@ -3,13 +3,15 @@ package com.airecorder.android.ui.screens
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.airecorder.android.data.model.RecordingDetail
-import com.airecorder.android.data.model.Task
 import com.airecorder.android.data.repository.RecordingRepository
+import com.airecorder.android.util.AudioPlayerManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -22,6 +24,7 @@ sealed class DetailUiState {
 sealed class AudioDownloadState {
     object NotDownloaded : AudioDownloadState()
     data class Downloading(val progress: Float, val downloaded: Long, val total: Long) : AudioDownloadState()
+    data class Paused(val progress: Float, val downloaded: Long, val total: Long) : AudioDownloadState()
     object Downloaded : AudioDownloadState()
     data class Error(val message: String) : AudioDownloadState()
 }
@@ -37,7 +40,8 @@ sealed class AudioPlaybackState {
 
 @HiltViewModel
 class DetailViewModel @Inject constructor(
-    private val repository: RecordingRepository
+    private val repository: RecordingRepository,
+    private val audioPlayerManager: AudioPlayerManager
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow<DetailUiState>(DetailUiState.Loading)
@@ -67,13 +71,43 @@ class DetailViewModel @Inject constructor(
     private val _audioPlaybackState = MutableStateFlow<AudioPlaybackState>(AudioPlaybackState.Idle)
     val audioPlaybackState: StateFlow<AudioPlaybackState> = _audioPlaybackState.asStateFlow()
     
-    private val _playbackSpeed = MutableStateFlow(1.0f)
-    val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
+    val playbackSpeed: StateFlow<Float> = audioPlayerManager.playbackSpeed
     
     private val _currentSegmentIndex = MutableStateFlow(-1)
     val currentSegmentIndex: StateFlow<Int> = _currentSegmentIndex.asStateFlow()
     
     private var currentRecordingId: String? = null
+    private var downloadJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            audioPlayerManager.playbackState.collectLatest { state ->
+                _audioPlaybackState.value = when (state) {
+                    is AudioPlayerManager.PlaybackState.Idle -> AudioPlaybackState.Idle
+                    is AudioPlayerManager.PlaybackState.Buffering -> AudioPlaybackState.Buffering
+                    is AudioPlayerManager.PlaybackState.Playing -> {
+                        updateSegmentIndex(state.positionMs)
+                        AudioPlaybackState.Playing(state.positionMs, state.durationMs)
+                    }
+                    is AudioPlayerManager.PlaybackState.Paused -> {
+                        updateSegmentIndex(state.positionMs)
+                        AudioPlaybackState.Paused(state.positionMs, state.durationMs)
+                    }
+                    is AudioPlayerManager.PlaybackState.Completed -> AudioPlaybackState.Completed(state.durationMs)
+                    is AudioPlayerManager.PlaybackState.Error -> AudioPlaybackState.Error(state.message)
+                }
+            }
+        }
+    }
+
+    private fun updateSegmentIndex(positionMs: Long) {
+        val detail = (uiState.value as? DetailUiState.Success)?.data ?: return
+        val seconds = positionMs / 1000.0
+        val index = detail.segments.findLast { (it.startTime ?: 0.0) <= seconds }?.let { segment ->
+            detail.segments.indexOf(segment)
+        } ?: -1
+        _currentSegmentIndex.value = index
+    }
     
     fun loadRecording(id: String) {
         currentRecordingId = id
@@ -82,11 +116,29 @@ class DetailViewModel @Inject constructor(
             repository.getRecording(id).fold(
                 onSuccess = { detail ->
                     _uiState.value = DetailUiState.Success(detail)
+                    checkCache(id)
                 },
                 onFailure = { exception ->
                     _uiState.value = DetailUiState.Error(exception.message ?: "Unknown error")
                 }
             )
+        }
+    }
+
+    private fun checkCache(id: String) {
+        if (repository.isAudioCached(id)) {
+            _audioDownloadState.value = AudioDownloadState.Downloaded
+        } else {
+            val detail = (uiState.value as? DetailUiState.Success)?.data
+            val format = detail?.recording?.format ?: "m4a"
+            val tempSize = repository.getTempFileSize(id, format)
+            if (tempSize > 0) {
+                val totalSize = detail?.recording?.fileSizeBytes ?: 0L
+                val progress = if (totalSize > 0) tempSize.toFloat() / totalSize else 0f
+                _audioDownloadState.value = AudioDownloadState.Paused(progress, tempSize, totalSize)
+            } else {
+                _audioDownloadState.value = AudioDownloadState.NotDownloaded
+            }
         }
     }
     
@@ -162,27 +214,57 @@ class DetailViewModel @Inject constructor(
     }
     
     fun startDownload() {
-        _audioDownloadState.value = AudioDownloadState.Downloading(0f, 0L, 0L)
+        val id = currentRecordingId ?: return
+        val format = (uiState.value as? DetailUiState.Success)?.data?.recording?.format ?: "m4a"
         
-        viewModelScope.launch {
-            var progress = 0f
-            while (progress < 1f) {
-                progress += 0.1f
-                val downloaded = (progress * 1000000).toLong()
-                val total = 1000000L
-                _audioDownloadState.value = AudioDownloadState.Downloading(
-                    progress.coerceAtMost(1f),
-                    downloaded,
-                    total
-                )
-                delay(200)
+        val startByte = if (_audioDownloadState.value is AudioDownloadState.Paused) {
+            (_audioDownloadState.value as AudioDownloadState.Paused).downloaded
+        } else {
+            0L
+        }
+        
+        downloadJob?.cancel()
+        downloadJob = viewModelScope.launch {
+            repository.downloadAudio(id, format, startByte).collect { status ->
+                _audioDownloadState.value = when (status) {
+                    is RecordingRepository.DownloadStatus.Started -> {
+                        if (startByte > 0) _audioDownloadState.value
+                        else AudioDownloadState.Downloading(0f, 0, 0)
+                    }
+                    is RecordingRepository.DownloadStatus.Progress -> AudioDownloadState.Downloading(status.progress, status.downloaded, status.total)
+                    is RecordingRepository.DownloadStatus.Success -> AudioDownloadState.Downloaded
+                    is RecordingRepository.DownloadStatus.Error -> AudioDownloadState.Error(status.message)
+                }
             }
-            _audioDownloadState.value = AudioDownloadState.Downloaded
+        }
+    }
+    
+    fun pauseDownload() {
+        val currentState = _audioDownloadState.value
+        if (currentState is AudioDownloadState.Downloading) {
+            downloadJob?.cancel()
+            _audioDownloadState.value = AudioDownloadState.Paused(
+                currentState.progress,
+                currentState.downloaded,
+                currentState.total
+            )
         }
     }
     
     fun cancelDownload() {
+        val id = currentRecordingId ?: return
+        val format = (uiState.value as? DetailUiState.Success)?.data?.recording?.format ?: "m4a"
+        downloadJob?.cancel()
+        repository.deleteTempFile(id, format)
         _audioDownloadState.value = AudioDownloadState.NotDownloaded
+    }
+
+    fun deleteAudio() {
+        val id = currentRecordingId ?: return
+        repository.clearAudioCache(id)
+        _audioDownloadState.value = AudioDownloadState.NotDownloaded
+        audioPlayerManager.stop()
+        _audioPlaybackState.value = AudioPlaybackState.Idle
     }
     
     fun retryDownload() {
@@ -190,71 +272,35 @@ class DetailViewModel @Inject constructor(
     }
     
     fun togglePlayPause() {
-        when (val state = _audioPlaybackState.value) {
-            is AudioPlaybackState.Idle -> {
-                _audioPlaybackState.value = AudioPlaybackState.Buffering
-                viewModelScope.launch {
-                    delay(500)
-                    _audioPlaybackState.value = AudioPlaybackState.Playing(0L, 60000L)
+        if (_audioDownloadState.value == AudioDownloadState.Downloaded) {
+            val file = repository.getCachedAudioFile(currentRecordingId!!)
+            if (file != null) {
+                if (_audioPlaybackState.value == AudioPlaybackState.Idle) {
+                    audioPlayerManager.play(file)
+                } else {
+                    audioPlayerManager.togglePlayPause()
                 }
-            }
-            is AudioPlaybackState.Playing -> {
-                _audioPlaybackState.value = AudioPlaybackState.Paused(state.positionMs, state.durationMs)
-            }
-            is AudioPlaybackState.Paused -> {
-                _audioPlaybackState.value = AudioPlaybackState.Playing(state.positionMs, state.durationMs)
-            }
-            else -> {
-                _audioPlaybackState.value = AudioPlaybackState.Idle
             }
         }
     }
     
     fun seekTo(positionMs: Long) {
-        when (val state = _audioPlaybackState.value) {
-            is AudioPlaybackState.Playing -> {
-                _audioPlaybackState.value = AudioPlaybackState.Playing(positionMs, state.durationMs)
-            }
-            is AudioPlaybackState.Paused -> {
-                _audioPlaybackState.value = AudioPlaybackState.Paused(positionMs, state.durationMs)
-            }
-            else -> {}
-        }
+        audioPlayerManager.seekTo(positionMs)
     }
     
     fun rewind() {
-        when (val state = _audioPlaybackState.value) {
-            is AudioPlaybackState.Playing -> {
-                val newPosition = (state.positionMs - 10000).coerceAtLeast(0L)
-                _audioPlaybackState.value = AudioPlaybackState.Playing(newPosition, state.durationMs)
-            }
-            is AudioPlaybackState.Paused -> {
-                val newPosition = (state.positionMs - 10000).coerceAtLeast(0L)
-                _audioPlaybackState.value = AudioPlaybackState.Paused(newPosition, state.durationMs)
-            }
-            else -> {}
-        }
+        audioPlayerManager.rewind()
     }
     
     fun forward() {
-        when (val state = _audioPlaybackState.value) {
-            is AudioPlaybackState.Playing -> {
-                val newPosition = (state.positionMs + 10000).coerceAtMost(state.durationMs)
-                _audioPlaybackState.value = AudioPlaybackState.Playing(newPosition, state.durationMs)
-            }
-            is AudioPlaybackState.Paused -> {
-                val newPosition = (state.positionMs + 10000).coerceAtMost(state.durationMs)
-                _audioPlaybackState.value = AudioPlaybackState.Paused(newPosition, state.durationMs)
-            }
-            else -> {}
-        }
+        audioPlayerManager.forward()
     }
     
     fun togglePlaybackSpeed() {
         val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
-        val currentIndex = speeds.indexOf(_playbackSpeed.value)
+        val currentIndex = speeds.indexOf(playbackSpeed.value)
         val nextIndex = (currentIndex + 1) % speeds.size
-        _playbackSpeed.value = speeds[nextIndex]
+        audioPlayerManager.setSpeed(speeds[nextIndex])
     }
     
     fun updateCurrentSegment(index: Int) {
@@ -263,15 +309,13 @@ class DetailViewModel @Inject constructor(
     
     fun jumpToSegment(startTime: Double) {
         val positionMs = (startTime * 1000).toLong()
-        when (val state = _audioPlaybackState.value) {
-            is AudioPlaybackState.Playing -> {
-                _audioPlaybackState.value = AudioPlaybackState.Playing(positionMs, state.durationMs)
-            }
-            is AudioPlaybackState.Paused -> {
-                _audioPlaybackState.value = AudioPlaybackState.Playing(positionMs, state.durationMs)
-            }
-            else -> {
-                _audioPlaybackState.value = AudioPlaybackState.Playing(positionMs, 60000L)
+        if (_audioDownloadState.value == AudioDownloadState.Downloaded) {
+            val file = repository.getCachedAudioFile(currentRecordingId!!)
+            if (file != null) {
+                if (_audioPlaybackState.value == AudioPlaybackState.Idle) {
+                    audioPlayerManager.play(file)
+                }
+                audioPlayerManager.seekTo(positionMs)
             }
         }
     }
@@ -313,5 +357,10 @@ class DetailViewModel @Inject constructor(
         
         _isTranscribing.value = false
         _isSummarizing.value = false
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        audioPlayerManager.stop()
     }
 }
