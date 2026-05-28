@@ -1,7 +1,10 @@
 package com.airecorder.android.ui.components
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.airecorder.android.data.model.Recording
@@ -47,61 +50,59 @@ fun List<Recording>.calculateMetrics(): RecordingMetrics {
 @Composable
 fun MetricCardsRow(
     recordings: List<Recording>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isExpanded: Boolean = true
 ) {
-    val metrics = recordings.calculateMetrics()
-    
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+    AnimatedVisibility(
+        visible = isExpanded,
+        enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+        exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            MetricCard(
-                title = "全部录音",
-                value = metrics.totalCount.toString(),
-                subtitle = FormatUtils.formatFileSize(metrics.totalSize),
-                color = Primary,
-                modifier = Modifier.weight(1f)
-            )
-            
-            MetricCard(
-                title = "待处理",
-                value = metrics.pendingCount.toString(),
-                progress = if (metrics.totalCount > 0) {
-                    1f - metrics.aiCompletionRate
-                } else {
-                    0f
-                },
-                color = StatusWarning,
-                modifier = Modifier.weight(1f)
-            )
-        }
+        val metrics = recordings.calculateMetrics()
         
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            MetricCard(
-                title = "AI 完成率",
-                value = "${(metrics.aiCompletionRate * 100).toInt()}%",
-                subtitle = "${metrics.completedCount} 已摘要",
-                progress = metrics.aiCompletionRate,
-                color = StatusSuccess,
-                modifier = Modifier.weight(1f)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                MetricCard(
+                    title = "全部录音",
+                    value = "${metrics.totalCount}",
+                    color = Primary,
+                    modifier = Modifier.weight(1f)
+                )
+                
+                MetricCard(
+                    title = "待处理",
+                    value = "${metrics.pendingCount}",
+                    color = StatusWarning,
+                    modifier = Modifier.weight(1f)
+                )
+            }
             
-            MetricCard(
-                title = "总时长",
-                value = FormatUtils.formatDuration(metrics.totalDuration),
-                subtitle = if (metrics.errorCount > 0) "${metrics.errorCount} 错误" else null,
-                color = Tertiary,
-                modifier = Modifier.weight(1f)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                MetricCard(
+                    title = "AI 完成率",
+                    value = "${(metrics.aiCompletionRate * 100).toInt()}%",
+                    color = StatusSuccess,
+                    modifier = Modifier.weight(1f)
+                )
+                
+                MetricCard(
+                    title = "总时长",
+                    value = FormatUtils.formatDuration(metrics.totalDuration),
+                    color = Tertiary,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }

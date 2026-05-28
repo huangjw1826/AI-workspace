@@ -21,6 +21,7 @@ class PreferencesManager @Inject constructor(
         val SERVER_URL = stringPreferencesKey("server_url")
         val API_TOKEN = stringPreferencesKey("api_token")
         val DARK_MODE = booleanPreferencesKey("dark_mode")
+        val OVERVIEW_EXPANDED = booleanPreferencesKey("overview_expanded")
     }
     
     val serverUrl: Flow<String> = context.dataStore.data
@@ -38,6 +39,11 @@ class PreferencesManager @Inject constructor(
             preferences[PreferencesKeys.DARK_MODE] ?: false
         }
     
+    val overviewExpanded: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.OVERVIEW_EXPANDED] ?: true
+        }
+    
     suspend fun setServerUrl(url: String) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.SERVER_URL] = url
@@ -53,6 +59,12 @@ class PreferencesManager @Inject constructor(
     suspend fun setDarkMode(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.DARK_MODE] = enabled
+        }
+    }
+    
+    suspend fun setOverviewExpanded(expanded: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.OVERVIEW_EXPANDED] = expanded
         }
     }
     

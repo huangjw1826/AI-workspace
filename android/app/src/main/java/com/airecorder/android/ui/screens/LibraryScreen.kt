@@ -9,6 +9,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
+import com.airecorder.android.data.local.PreferencesManager
+import kotlinx.coroutines.launch
 import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
@@ -27,6 +29,7 @@ import com.airecorder.android.ui.theme.*
 @Composable
 fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
+    preferencesManager: PreferencesManager,
     onNavigateToDetail: (String) -> Unit,
     onUploadClick: () -> Unit
 ) {
@@ -43,6 +46,25 @@ fun LibraryScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     
     var isSearchExpanded by remember { mutableStateOf(false) }
+    
+    val coroutineScope = rememberCoroutineScope()
+    
+    var isOverviewExpanded by remember { mutableStateOf(true) }
+    
+    LaunchedEffect(Unit) {
+        preferencesManager.overviewExpanded.collect { expanded ->
+            isOverviewExpanded = expanded
+        }
+    }
+    
+    val toggleOverview = {
+        val newState = !isOverviewExpanded
+        isOverviewExpanded = newState
+        coroutineScope.launch {
+            preferencesManager.setOverviewExpanded(newState)
+        }
+        Unit
+    }
     
     val isSelectionMode = selectedRecordingIds.isNotEmpty()
     
@@ -66,6 +88,13 @@ fun LibraryScreen(
                         )
                     },
                     actions = {
+                        IconButton(onClick = toggleOverview) {
+                            Icon(
+                                imageVector = if (isOverviewExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (isOverviewExpanded) "收起概览" else "展开概览",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                         IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
                             Icon(
                                 imageVector = if (isSearchExpanded) Icons.Default.FilterListOff else Icons.Default.FilterList,
@@ -115,6 +144,7 @@ fun LibraryScreen(
                             isRefreshing = isRefreshing,
                             isSelectionMode = isSelectionMode,
                             isSearchExpanded = isSearchExpanded,
+                            isOverviewExpanded = isOverviewExpanded,
                             onSearchQueryChanged = { viewModel.onSearchQueryChanged(it) },
                             onStatusToggle = { viewModel.toggleStatusFilter(it) },
                             onSourceSelect = { viewModel.setSourceFilter(it) },
@@ -150,6 +180,7 @@ private fun ContentView(
     isRefreshing: Boolean,
     isSelectionMode: Boolean,
     isSearchExpanded: Boolean,
+    isOverviewExpanded: Boolean,
     onSearchQueryChanged: (String) -> Unit,
     onStatusToggle: (String) -> Unit,
     onSourceSelect: (String?) -> Unit,
@@ -164,7 +195,10 @@ private fun ContentView(
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
-        MetricCardsRow(recordings = recordings)
+        MetricCardsRow(
+            recordings = recordings,
+            isExpanded = isOverviewExpanded
+        )
         
         if (isSearchExpanded) {
             Column(

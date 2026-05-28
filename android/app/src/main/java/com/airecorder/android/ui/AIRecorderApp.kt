@@ -10,13 +10,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.airecorder.android.data.local.PreferencesManager
 import com.airecorder.android.data.model.Summary
+import com.airecorder.android.di.PreferencesManagerEntryPoint
 import com.airecorder.android.ui.animation.PageTransitions
 import com.airecorder.android.ui.components.BottomNavigationBar
 import com.airecorder.android.ui.components.ToastContainer
@@ -28,6 +31,7 @@ import com.airecorder.android.ui.screens.SettingsScreen
 import com.airecorder.android.ui.screens.UploadBottomSheet
 import com.airecorder.android.ui.screens.detail.SummaryDetailScreen
 import com.airecorder.android.ui.screens.watch.WatchScreen
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.serialization.json.Json
 
 @OptIn(ExperimentalAnimationApi::class)
@@ -115,7 +119,13 @@ fun AIRecorderApp(
                     popEnterTransition = { PageTransitions.popEnterTransition },
                     popExitTransition = { PageTransitions.popExitTransition }
                 ) {
+                    val preferencesManager = EntryPointAccessors.fromApplication(
+                        LocalContext.current.applicationContext as android.app.Application,
+                        PreferencesManagerEntryPoint::class.java
+                    ).preferencesManager()
+                    
                     LibraryScreen(
+                        preferencesManager = preferencesManager,
                         onNavigateToDetail = actions.navigateToDetail,
                         onUploadClick = { showUploadSheet = true }
                     )
