@@ -19,6 +19,22 @@ sealed class DetailUiState {
     data class Error(val message: String) : DetailUiState()
 }
 
+sealed class AudioDownloadState {
+    object NotDownloaded : AudioDownloadState()
+    data class Downloading(val progress: Float, val downloaded: Long, val total: Long) : AudioDownloadState()
+    object Downloaded : AudioDownloadState()
+    data class Error(val message: String) : AudioDownloadState()
+}
+
+sealed class AudioPlaybackState {
+    object Idle : AudioPlaybackState()
+    object Buffering : AudioPlaybackState()
+    data class Playing(val positionMs: Long, val durationMs: Long) : AudioPlaybackState()
+    data class Paused(val positionMs: Long, val durationMs: Long) : AudioPlaybackState()
+    data class Completed(val durationMs: Long) : AudioPlaybackState()
+    data class Error(val message: String) : AudioPlaybackState()
+}
+
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     private val repository: RecordingRepository
@@ -44,6 +60,18 @@ class DetailViewModel @Inject constructor(
     
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+    
+    private val _audioDownloadState = MutableStateFlow<AudioDownloadState>(AudioDownloadState.NotDownloaded)
+    val audioDownloadState: StateFlow<AudioDownloadState> = _audioDownloadState.asStateFlow()
+    
+    private val _audioPlaybackState = MutableStateFlow<AudioPlaybackState>(AudioPlaybackState.Idle)
+    val audioPlaybackState: StateFlow<AudioPlaybackState> = _audioPlaybackState.asStateFlow()
+    
+    private val _playbackSpeed = MutableStateFlow(1.0f)
+    val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
+    
+    private val _currentSegmentIndex = MutableStateFlow(-1)
+    val currentSegmentIndex: StateFlow<Int> = _currentSegmentIndex.asStateFlow()
     
     private var currentRecordingId: String? = null
     
@@ -131,6 +159,121 @@ class DetailViewModel @Inject constructor(
     
     fun dismissSummaryTemplates() {
         _showSummaryTemplates.value = false
+    }
+    
+    fun startDownload() {
+        _audioDownloadState.value = AudioDownloadState.Downloading(0f, 0L, 0L)
+        
+        viewModelScope.launch {
+            var progress = 0f
+            while (progress < 1f) {
+                progress += 0.1f
+                val downloaded = (progress * 1000000).toLong()
+                val total = 1000000L
+                _audioDownloadState.value = AudioDownloadState.Downloading(
+                    progress.coerceAtMost(1f),
+                    downloaded,
+                    total
+                )
+                delay(200)
+            }
+            _audioDownloadState.value = AudioDownloadState.Downloaded
+        }
+    }
+    
+    fun cancelDownload() {
+        _audioDownloadState.value = AudioDownloadState.NotDownloaded
+    }
+    
+    fun retryDownload() {
+        startDownload()
+    }
+    
+    fun togglePlayPause() {
+        when (val state = _audioPlaybackState.value) {
+            is AudioPlaybackState.Idle -> {
+                _audioPlaybackState.value = AudioPlaybackState.Buffering
+                viewModelScope.launch {
+                    delay(500)
+                    _audioPlaybackState.value = AudioPlaybackState.Playing(0L, 60000L)
+                }
+            }
+            is AudioPlaybackState.Playing -> {
+                _audioPlaybackState.value = AudioPlaybackState.Paused(state.positionMs, state.durationMs)
+            }
+            is AudioPlaybackState.Paused -> {
+                _audioPlaybackState.value = AudioPlaybackState.Playing(state.positionMs, state.durationMs)
+            }
+            else -> {
+                _audioPlaybackState.value = AudioPlaybackState.Idle
+            }
+        }
+    }
+    
+    fun seekTo(positionMs: Long) {
+        when (val state = _audioPlaybackState.value) {
+            is AudioPlaybackState.Playing -> {
+                _audioPlaybackState.value = AudioPlaybackState.Playing(positionMs, state.durationMs)
+            }
+            is AudioPlaybackState.Paused -> {
+                _audioPlaybackState.value = AudioPlaybackState.Paused(positionMs, state.durationMs)
+            }
+            else -> {}
+        }
+    }
+    
+    fun rewind() {
+        when (val state = _audioPlaybackState.value) {
+            is AudioPlaybackState.Playing -> {
+                val newPosition = (state.positionMs - 10000).coerceAtLeast(0L)
+                _audioPlaybackState.value = AudioPlaybackState.Playing(newPosition, state.durationMs)
+            }
+            is AudioPlaybackState.Paused -> {
+                val newPosition = (state.positionMs - 10000).coerceAtLeast(0L)
+                _audioPlaybackState.value = AudioPlaybackState.Paused(newPosition, state.durationMs)
+            }
+            else -> {}
+        }
+    }
+    
+    fun forward() {
+        when (val state = _audioPlaybackState.value) {
+            is AudioPlaybackState.Playing -> {
+                val newPosition = (state.positionMs + 10000).coerceAtMost(state.durationMs)
+                _audioPlaybackState.value = AudioPlaybackState.Playing(newPosition, state.durationMs)
+            }
+            is AudioPlaybackState.Paused -> {
+                val newPosition = (state.positionMs + 10000).coerceAtMost(state.durationMs)
+                _audioPlaybackState.value = AudioPlaybackState.Paused(newPosition, state.durationMs)
+            }
+            else -> {}
+        }
+    }
+    
+    fun togglePlaybackSpeed() {
+        val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+        val currentIndex = speeds.indexOf(_playbackSpeed.value)
+        val nextIndex = (currentIndex + 1) % speeds.size
+        _playbackSpeed.value = speeds[nextIndex]
+    }
+    
+    fun updateCurrentSegment(index: Int) {
+        _currentSegmentIndex.value = index
+    }
+    
+    fun jumpToSegment(startTime: Double) {
+        val positionMs = (startTime * 1000).toLong()
+        when (val state = _audioPlaybackState.value) {
+            is AudioPlaybackState.Playing -> {
+                _audioPlaybackState.value = AudioPlaybackState.Playing(positionMs, state.durationMs)
+            }
+            is AudioPlaybackState.Paused -> {
+                _audioPlaybackState.value = AudioPlaybackState.Playing(positionMs, state.durationMs)
+            }
+            else -> {
+                _audioPlaybackState.value = AudioPlaybackState.Playing(positionMs, 60000L)
+            }
+        }
     }
     
     private suspend fun pollTask(taskId: String, recordingId: String) {

@@ -2,9 +2,10 @@ from collections.abc import Generator
 from pathlib import Path
 
 from sqlalchemy import inspect, text
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.config import get_settings
+from app.models.api_token import ApiToken
 from app.services.file_service import content_hash
 
 settings = get_settings()
@@ -18,6 +19,33 @@ engine = create_engine(
 def init_db() -> None:
     SQLModel.metadata.create_all(engine)
     _upgrade_sqlite_schema()
+    _migrate_legacy_token()
+
+
+def _migrate_legacy_token() -> None:
+    """Migrate legacy API_TOKEN from environment to database if needed."""
+    if not settings.api_token:
+        return
+
+    with Session(engine) as session:
+        statement = select(ApiToken).where(ApiToken.token == settings.api_token)
+        existing = session.exec(statement).first()
+        if existing:
+            return
+
+        statement = select(ApiToken)
+        any_token = session.exec(statement).first()
+        if any_token:
+            return
+
+        legacy_token = ApiToken(
+            token=settings.api_token,
+            name="Default Token (Legacy)",
+            device_info='{"source": "legacy_env"}',
+            is_active=True,
+        )
+        session.add(legacy_token)
+        session.commit()
 
 
 def _upgrade_sqlite_schema() -> None:

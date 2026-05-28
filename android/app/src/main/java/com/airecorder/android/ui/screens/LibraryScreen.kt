@@ -1,26 +1,22 @@
 package com.airecorder.android.ui.screens
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.airecorder.android.R
-import com.airecorder.android.ui.components.EmptyState
-import com.airecorder.android.ui.components.ErrorState
-import com.airecorder.android.ui.components.LoadingState
-import com.airecorder.android.ui.components.RecordingItem
+import com.airecorder.android.data.model.Recording
+import com.airecorder.android.ui.components.*
 import com.airecorder.android.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,75 +28,79 @@ fun LibraryScreen(
     LaunchedEffect(Unit) {
         viewModel.loadRecordings()
     }
-
+    
     val uiState by viewModel.uiState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
-
+    val selectedStatuses by viewModel.selectedStatuses.collectAsState()
+    val selectedSource by viewModel.selectedSource.collectAsState()
+    val sortOption by viewModel.sortOption.collectAsState()
+    val selectedRecordingIds by viewModel.selectedRecordingIds.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
+    
+    val isSelectionMode = selectedRecordingIds.isNotEmpty()
+    
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(R.string.library_title),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Background,
-                    scrolledContainerColor = Surface
+            if (isSelectionMode) {
+                BatchOperationBar(
+                    selectedCount = selectedRecordingIds.size,
+                    onTranscribe = { viewModel.batchTranscribe() },
+                    onSummarize = { viewModel.batchSummarize() },
+                    onDelete = { viewModel.batchDelete() },
+                    onDeselectAll = { viewModel.deselectAllRecordings() }
                 )
-            )
+            } else {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "录音库",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Background,
+                        scrolledContainerColor = Surface
+                    )
+                )
+            }
         },
         containerColor = Background,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0) // 已经由外层 Scaffold 处理了 padding
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .animateContentSize()
         ) {
-            // Search UI
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { viewModel.onSearchQueryChanged(it) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                placeholder = { Text(stringResource(R.string.library_search)) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(18.dp))
-                        }
-                    }
-                },
-                shape = RoundedCornerShape(16.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = Surface,
-                    focusedContainerColor = Surface,
-                    unfocusedBorderColor = DividerLight,
-                    focusedBorderColor = Primary
-                ),
-                singleLine = true
-            )
-
             when (val state = uiState) {
                 is LibraryUiState.Loading -> {
-                    LoadingState(message = stringResource(R.string.loading_recordings))
+                    SkeletonLoading()
                 }
                 is LibraryUiState.Success -> {
-                    if (state.recordings.isEmpty()) {
-                        EmptyState(
-                            title = stringResource(R.string.library_empty),
-                            subtitle = stringResource(R.string.library_empty_subtitle)
-                        )
+                    if (state.recordings.isEmpty() && searchQuery.isEmpty() && 
+                        selectedStatuses.isEmpty() && selectedSource == null) {
+                        EmptyLibraryView()
                     } else {
-                        RecordingList(
+                        ContentView(
                             recordings = state.recordings,
-                            onItemClick = onNavigateToDetail
+                            searchQuery = searchQuery,
+                            selectedStatuses = selectedStatuses,
+                            selectedSource = selectedSource,
+                            sortOption = sortOption,
+                            selectedRecordingIds = selectedRecordingIds,
+                            isRefreshing = isRefreshing,
+                            isSelectionMode = isSelectionMode,
+                            onSearchQueryChanged = { viewModel.onSearchQueryChanged(it) },
+                            onStatusToggle = { viewModel.toggleStatusFilter(it) },
+                            onSourceSelect = { viewModel.setSourceFilter(it) },
+                            onSortSelect = { viewModel.setSortOption(it) },
+                            onClearAllFilters = { viewModel.clearAllFilters() },
+                            onRemoveStatus = { viewModel.toggleStatusFilter(it) },
+                            onRemoveSource = { viewModel.setSourceFilter(null) },
+                            onRecordingClick = { onNavigateToDetail(it) },
+                            onRecordingLongClick = { viewModel.toggleRecordingSelection(it) },
+                            onRefresh = { viewModel.refresh() }
                         )
                     }
                 }
@@ -116,24 +116,252 @@ fun LibraryScreen(
 }
 
 @Composable
-private fun RecordingList(
-    recordings: List<com.airecorder.android.data.model.Recording>,
-    onItemClick: (String) -> Unit,
+private fun ContentView(
+    recordings: List<Recording>,
+    searchQuery: String,
+    selectedStatuses: Set<String>,
+    selectedSource: String?,
+    sortOption: SortOption,
+    selectedRecordingIds: Set<String>,
+    isRefreshing: Boolean,
+    isSelectionMode: Boolean,
+    onSearchQueryChanged: (String) -> Unit,
+    onStatusToggle: (String) -> Unit,
+    onSourceSelect: (String?) -> Unit,
+    onSortSelect: (SortOption) -> Unit,
+    onClearAllFilters: () -> Unit,
+    onRemoveStatus: (String) -> Unit,
+    onRemoveSource: () -> Unit,
+    onRecordingClick: (String) -> Unit,
+    onRecordingLongClick: (String) -> Unit,
+    onRefresh: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        MetricCardsRow(recordings = recordings)
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        SearchBar(
+            query = searchQuery,
+            onQueryChange = onSearchQueryChanged,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        FilterChips(
+            selectedStatuses = selectedStatuses,
+            onStatusToggle = onStatusToggle,
+            selectedSource = selectedSource,
+            onSourceSelect = onSourceSelect,
+            sortOption = sortOption,
+            onSortSelect = onSortSelect
+        )
+        
+        ActiveFilterTags(
+            selectedStatuses = selectedStatuses,
+            selectedSource = selectedSource,
+            onRemoveStatus = onRemoveStatus,
+            onRemoveSource = onRemoveSource,
+            onClearAll = onClearAllFilters
+        )
+        
+        if (recordings.isEmpty()) {
+            EmptyFilteredView()
+        } else {
+            RecordingList(
+                recordings = recordings,
+                selectedRecordingIds = selectedRecordingIds,
+                isSelectionMode = isSelectionMode,
+                isRefreshing = isRefreshing,
+                onRecordingClick = onRecordingClick,
+                onRecordingLongClick = onRecordingLongClick,
+                onRefresh = onRefresh
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        items(
-            items = recordings,
-            key = { it.id }
-        ) { recording ->
-            RecordingItem(
-                recording = recording,
-                onClick = { onItemClick(recording.id) }
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = modifier
+            .fillMaxWidth(),
+        placeholder = { Text("搜索文件名") },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Outlined.Search,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = TextSecondary
             )
+        },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(
+                        imageVector = Icons.Default.Clear,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        },
+        shape = RoundedCornerShape(12.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            unfocusedContainerColor = Surface,
+            focusedContainerColor = Surface,
+            unfocusedBorderColor = Outline,
+            focusedBorderColor = Primary
+        ),
+        singleLine = true
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RecordingList(
+    recordings: List<Recording>,
+    selectedRecordingIds: Set<String>,
+    isSelectionMode: Boolean,
+    isRefreshing: Boolean,
+    onRecordingClick: (String) -> Unit,
+    onRecordingLongClick: (String) -> Unit,
+    onRefresh: () -> Unit
+) {
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            items(
+                items = recordings,
+                key = { it.id }
+            ) { recording ->
+                RecordingItem(
+                    recording = recording,
+                    isSelected = recording.id in selectedRecordingIds,
+                    isSelectionMode = isSelectionMode,
+                    onClick = { onRecordingClick(recording.id) },
+                    onLongClick = { onRecordingLongClick(recording.id) }
+                )
+            }
+            
+            item {
+                Spacer(modifier = Modifier.height(80.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyLibraryView() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.MicNone,
+            contentDescription = null,
+            modifier = Modifier.size(80.dp),
+            tint = TextTertiary
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "还没有录音",
+            style = MaterialTheme.typography.titleLarge,
+            color = TextSecondary
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "点击右下角 + 上传音频文件",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextTertiary,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun EmptyFilteredView() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.SearchOff,
+            contentDescription = null,
+            modifier = Modifier.size(80.dp),
+            tint = TextTertiary
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "没有找到匹配的录音",
+            style = MaterialTheme.typography.titleLarge,
+            color = TextSecondary
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "尝试调整筛选条件",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextTertiary
+        )
+    }
+}
+
+@Composable
+private fun ErrorState(
+    error: String,
+    onRetry: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.ErrorOutline,
+            contentDescription = null,
+            modifier = Modifier.size(80.dp),
+            tint = Error
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "加载失败",
+            style = MaterialTheme.typography.titleLarge,
+            color = TextSecondary
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = error,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextTertiary,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onRetry) {
+            Text("重试")
         }
     }
 }

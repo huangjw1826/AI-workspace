@@ -1,40 +1,35 @@
 package com.airecorder.android.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.airecorder.android.R
-import com.airecorder.android.ui.components.ErrorState
-import com.airecorder.android.ui.components.LoadingState
-import com.airecorder.android.ui.theme.*
+import com.airecorder.android.data.model.Summary
+import com.airecorder.android.data.model.TranscriptSegment
+import com.airecorder.android.ui.components.*
+import com.airecorder.android.ui.screens.detail.*
+import com.airecorder.android.ui.theme.DividerLight
+import com.airecorder.android.ui.theme.TextSecondary
+import com.airecorder.android.ui.theme.TextTertiary
+import com.airecorder.android.util.AudioUtils
 import com.airecorder.android.util.FormatUtils
-import com.halilibo.richtext.markdown.Markdown
-import com.halilibo.richtext.ui.material3.RichText
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,13 +37,14 @@ fun DetailScreen(
     recordingId: String,
     viewModel: DetailViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
+    onNavigateToSummaryDetail: (Summary) -> Unit,
     onNavigateToLibrary: () -> Unit,
     onNavigateToSettings: () -> Unit
 ) {
     LaunchedEffect(recordingId) {
         viewModel.loadRecording(recordingId)
     }
-
+    
     val uiState by viewModel.uiState.collectAsState()
     val selectedTab by viewModel.selectedTab.collectAsState()
     val isTranscribing by viewModel.isTranscribing.collectAsState()
@@ -56,8 +52,30 @@ fun DetailScreen(
     val showSummaryTemplates by viewModel.showSummaryTemplates.collectAsState()
     val summaryTemplates by viewModel.summaryTemplates.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val clipboardManager = LocalClipboardManager.current
-
+    val audioDownloadState by viewModel.audioDownloadState.collectAsState()
+    val audioPlaybackState by viewModel.audioPlaybackState.collectAsState()
+    val playbackSpeed by viewModel.playbackSpeed.collectAsState()
+    val currentSegmentIndex by viewModel.currentSegmentIndex.collectAsState()
+    
+    val pagerState = rememberPagerState(
+        initialPage = selectedTab,
+        pageCount = { 5 }
+    )
+    
+    val scope = rememberCoroutineScope()
+    
+    LaunchedEffect(selectedTab) {
+        if (pagerState.currentPage != selectedTab) {
+            pagerState.animateScrollToPage(selectedTab)
+        }
+    }
+    
+    LaunchedEffect(pagerState.currentPage) {
+        if (pagerState.currentPage != selectedTab) {
+            viewModel.selectTab(pagerState.currentPage)
+        }
+    }
+    
     Scaffold(
         topBar = {
             TopAppBar(
@@ -82,7 +100,7 @@ fun DetailScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.back),
-                            tint = TextPrimary
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 },
@@ -92,151 +110,180 @@ fun DetailScreen(
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = "刷新",
-                                tint = TextPrimary
+                                tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         IconButton(
                             onClick = { viewModel.deleteRecording(recordingId, onNavigateBack) }
                         ) {
                             Icon(
-                                imageVector = Icons.Default.DeleteOutline,
+                                imageVector = Icons.Default.Delete,
                                 contentDescription = stringResource(R.string.delete),
-                                tint = StatusError
+                                tint = MaterialTheme.colorScheme.error
                             )
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Surface,
-                    scrolledContainerColor = Surface
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface
                 )
             )
         },
-        floatingActionButton = {
-            if (uiState is DetailUiState.Success) {
-                ExtendedFloatingActionButton(
-                    onClick = {
-                        if (selectedTab == 0) {
-                            viewModel.transcribe(recordingId)
-                        } else if (selectedTab == 1) {
-                            viewModel.loadSummaryTemplates()
-                        }
-                    },
-                    containerColor = if (selectedTab == 0) TranscribeStatus else SummarizeStatus,
-                    contentColor = OnPrimary,
-                    elevation = FloatingActionButtonDefaults.bottomAppBarFabElevation(
-                        defaultElevation = 6.dp,
-                        pressedElevation = 8.dp
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Icon(
-                        imageVector = if (selectedTab == 0) Icons.Default.Subtitles else Icons.Default.AutoAwesome,
-                        contentDescription = if (selectedTab == 0) stringResource(R.string.transcribe) else stringResource(R.string.summarize),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (selectedTab == 0) stringResource(R.string.transcribe) else stringResource(R.string.summarize),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-        },
-        containerColor = Background,
+        containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets.safeDrawing
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .animateContentSize()
         ) {
-            when (val state = uiState) {
-                is DetailUiState.Loading -> {
-                    LoadingState(message = stringResource(R.string.loading_recording))
-                }
-                is DetailUiState.Success -> {
-                    val data = state.data
-
-                    TabRow(
-                        selectedTabIndex = selectedTab,
-                        containerColor = Surface,
-                        contentColor = Primary,
-                        indicator = { tabPositions ->
-                            if (selectedTab < tabPositions.size) {
-                                TabRowDefaults.SecondaryIndicator(
-                                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                                    color = Primary
-                                )
-                            }
-                        },
-                        divider = {}
-                    ) {
-                        Tab(
-                            selected = selectedTab == 0,
-                            onClick = { viewModel.selectTab(0) },
-                            text = {
-                                TabLabel(
-                                    icon = Icons.Default.Subtitles,
-                                    label = stringResource(R.string.tab_transcript),
-                                    selected = selectedTab == 0
-                                )
-                            },
-                            selectedContentColor = Primary,
-                            unselectedContentColor = TextTertiary
-                        )
-                        Tab(
-                            selected = selectedTab == 1,
-                            onClick = { viewModel.selectTab(1) },
-                            text = {
-                                TabLabel(
-                                    icon = Icons.Default.Description,
-                                    label = stringResource(R.string.tab_summary),
-                                    selected = selectedTab == 1
-                                )
-                            },
-                            selectedContentColor = Primary,
-                            unselectedContentColor = TextTertiary
-                        )
-                        Tab(
-                            selected = selectedTab == 2,
-                            onClick = { viewModel.selectTab(2) },
-                            text = {
-                                TabLabel(
-                                    icon = Icons.Default.Info,
-                                    label = stringResource(R.string.tab_info),
-                                    selected = selectedTab == 2
-                                )
-                            },
-                            selectedContentColor = Primary,
-                            unselectedContentColor = TextTertiary
+            DownloadProgressIndicator(
+                downloadState = audioDownloadState,
+                onCancel = { viewModel.cancelDownload() },
+                onRetry = { viewModel.retryDownload() }
+            )
+            
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.primary,
+                indicator = { tabPositions ->
+                    if (selectedTab < tabPositions.size) {
+                        TabRowDefaults.SecondaryIndicator(
+                            modifier = Modifier.pagerTabIndicatorOffset(tabPositions, selectedTab),
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        when (selectedTab) {
-                            0 -> TranscriptContent(data, clipboardManager, isTranscribing)
-                            1 -> SummaryContent(data, clipboardManager, isSummarizing)
-                            2 -> InfoContent(data)
+                },
+                divider = {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
+                }
+            ) {
+                TabItem(
+                    selected = selectedTab == 0,
+                    onClick = { viewModel.selectTab(0) },
+                    title = "播放",
+                    icon = Icons.Default.Refresh
+                )
+                TabItem(
+                    selected = selectedTab == 1,
+                    onClick = { viewModel.selectTab(1) },
+                    title = "转写",
+                    icon = Icons.Default.Subtitles
+                )
+                TabItem(
+                    selected = selectedTab == 2,
+                    onClick = { viewModel.selectTab(2) },
+                    title = "摘要",
+                    icon = Icons.Default.Description
+                )
+                TabItem(
+                    selected = selectedTab == 3,
+                    onClick = { viewModel.selectTab(3) },
+                    title = "信息",
+                    icon = Icons.Default.Info
+                )
+                TabItem(
+                    selected = selectedTab == 4,
+                    onClick = { viewModel.selectTab(4) },
+                    title = "任务",
+                    icon = Icons.Default.Description
+                )
+            }
+            
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                when (val state = uiState) {
+                    is DetailUiState.Loading -> {
+                        LoadingState(message = stringResource(R.string.loading_recording))
+                    }
+                    is DetailUiState.Success -> {
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier.fillMaxSize(),
+                            userScrollEnabled = true
+                        ) { page ->
+                            when (page) {
+                                0 -> {
+                                    val (currentPos, duration, isPlaying, isBuffering) = when (val playback = audioPlaybackState) {
+                                        is AudioPlaybackState.Playing -> Triple(playback.positionMs, playback.durationMs, true, false)
+                                        is AudioPlaybackState.Paused -> Triple(playback.positionMs, playback.durationMs, false, false)
+                                        is AudioPlaybackState.Buffering -> Triple(0L, 0L, false, true)
+                                        else -> Triple(0L, 0L, false, false)
+                                    }
+                                    
+                                    val playTabDownloadState = when (audioDownloadState) {
+                                        is AudioDownloadState.Downloading -> com.airecorder.android.ui.screens.detail.AudioDownloadState.Downloading(
+                                            (audioDownloadState as AudioDownloadState.Downloading).progress,
+                                            (audioDownloadState as AudioDownloadState.Downloading).downloaded,
+                                            (audioDownloadState as AudioDownloadState.Downloading).total
+                                        )
+                                        is AudioDownloadState.Downloaded -> com.airecorder.android.ui.screens.detail.AudioDownloadState.Downloaded
+                                        is AudioDownloadState.Error -> com.airecorder.android.ui.screens.detail.AudioDownloadState.Error(
+                                            (audioDownloadState as AudioDownloadState.Error).message
+                                        )
+                                        else -> com.airecorder.android.ui.screens.detail.AudioDownloadState.NotDownloaded
+                                    }
+                                    
+                                    PlayTab(
+                                        recordingDetail = state.data,
+                                        audioState = playTabDownloadState,
+                                        isPlaying = isPlaying,
+                                        isBuffering = isBuffering,
+                                        currentPosition = currentPos,
+                                        duration = duration,
+                                        playbackSpeed = playbackSpeed,
+                                        currentSegmentIndex = currentSegmentIndex,
+                                        onDownload = { viewModel.startDownload() },
+                                        onPlayPause = { viewModel.togglePlayPause() },
+                                        onSeekTo = { viewModel.seekTo(it) },
+                                        onRewind = { viewModel.rewind() },
+                                        onForward = { viewModel.forward() },
+                                        onChangeSpeed = { viewModel.togglePlaybackSpeed() },
+                                        onSegmentClick = { segment ->
+                                            segment.startTime?.let { viewModel.jumpToSegment(it) }
+                                        }
+                                    )
+                                }
+                                1 -> {
+                                    TranscriptTab(
+                                        recordingDetail = state.data,
+                                        isTranscribing = isTranscribing,
+                                        onTranscribe = { viewModel.transcribe(recordingId) }
+                                    )
+                                }
+                                2 -> {
+                                    SummaryTab(
+                                        summaries = state.data.summaries,
+                                        isSummarizing = isSummarizing,
+                                        onSummaryClick = { summary -> onNavigateToSummaryDetail(summary) },
+                                        onGenerateNew = { viewModel.loadSummaryTemplates() }
+                                    )
+                                }
+                                3 -> {
+                                    InfoTab(recording = state.data.recording)
+                                }
+                                4 -> {
+                                    TaskTab(tasks = state.data.tasks)
+                                }
+                            }
                         }
                     }
-                }
-                is DetailUiState.Error -> {
-                    ErrorState(
-                        error = state.message,
-                        onRetry = { viewModel.loadRecording(recordingId) }
-                    )
+                    is DetailUiState.Error -> {
+                        ErrorState(
+                            error = state.message,
+                            onRetry = { viewModel.loadRecording(recordingId) }
+                        )
+                    }
                 }
             }
         }
     }
-
+    
     if (showSummaryTemplates) {
         SummaryTemplateBottomSheet(
             templates = summaryTemplates,
@@ -250,39 +297,111 @@ fun DetailScreen(
 }
 
 @Composable
-private fun TabLabel(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    selected: Boolean
+fun TabItem(
+    selected: Boolean,
+    onClick: () -> Unit,
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp)
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
-        )
+    Tab(
+        selected = selected,
+        onClick = onClick,
+        text = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                )
+            }
+        },
+        selectedContentColor = MaterialTheme.colorScheme.primary,
+        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+fun DownloadProgressIndicator(
+    downloadState: AudioDownloadState,
+    onCancel: () -> Unit,
+    onRetry: () -> Unit
+) {
+    if (downloadState is AudioDownloadState.Downloading) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            color = MaterialTheme.colorScheme.primaryContainer,
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "下载进度 ${(downloadState.progress * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = AudioUtils.formatProgress(downloadState.downloaded, downloadState.total),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    )
+                }
+                
+                LinearProgressIndicator(
+                    progress = { downloadState.progress },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                )
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onCancel,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("取消")
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-fun TranscriptContent(
-    data: com.airecorder.android.data.model.RecordingDetail,
-    clipboardManager: androidx.compose.ui.platform.ClipboardManager,
-    isTranscribing: Boolean
+fun TranscriptTab(
+    recordingDetail: com.airecorder.android.data.model.RecordingDetail,
+    isTranscribing: Boolean,
+    onTranscribe: () -> Unit
 ) {
-    val fullText = data.segments.joinToString("\n") {
-        val timestamp = FormatUtils.formatDuration(it.startTime)
+    val clipboardManager = LocalClipboardManager.current
+    val fullText = recordingDetail.segments.joinToString("\n") {
+        val timestamp = FormatUtils.formatDuration(it.startTime ?: 0.0)
         "[$timestamp] ${it.speaker ?: "Speaker"}: ${it.text}"
     }
-
+    
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -293,85 +412,53 @@ fun TranscriptContent(
             isProcessing = isTranscribing,
             message = stringResource(R.string.transcribing)
         )
-
-        if (data.segments.isEmpty() && !isTranscribing) {
+        
+        if (recordingDetail.segments.isEmpty() && !isTranscribing) {
             EmptyContentCard(
                 icon = Icons.Default.Subtitles,
                 title = stringResource(R.string.no_transcript),
                 subtitle = stringResource(R.string.no_transcript_hint)
             )
-        } else {
-            data.segments.forEachIndexed { index, segment ->
-                TranscriptSegmentCard(
-                    segment = segment,
-                    isFirst = index == 0
+            
+            Button(
+                onClick = onTranscribe,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Subtitles,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
                 )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("生成转写")
             }
-        }
-
-        ActionButtons(
-            hasContent = data.segments.isNotEmpty(),
-            onCopy = { clipboardManager.setText(AnnotatedString(fullText)) },
-            onExport = { /* TODO: Export transcript */ },
-            copyText = stringResource(R.string.copy_text),
-            exportText = stringResource(R.string.export_md)
-        )
-    }
-}
-
-@Composable
-fun SummaryContent(
-    data: com.airecorder.android.data.model.RecordingDetail,
-    clipboardManager: androidx.compose.ui.platform.ClipboardManager,
-    isSummarizing: Boolean
-) {
-    val sortedSummaries = data.summaries.sortedByDescending { summary ->
-        summary.createdAt?.let { createdAt ->
-            parseTimestampToMillis(createdAt)
-        } ?: 0L
-    }
-    val latestId = sortedSummaries.firstOrNull()?.id
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        ProcessingIndicator(
-            isProcessing = isSummarizing,
-            message = stringResource(R.string.summarizing)
-        )
-
-        if (sortedSummaries.isEmpty() && !isSummarizing) {
-            EmptyContentCard(
-                icon = Icons.Default.Description,
-                title = stringResource(R.string.no_summary),
-                subtitle = stringResource(R.string.no_summary_hint)
-            )
         } else {
-            sortedSummaries.forEachIndexed { index, summary ->
-                ExpandableSummaryCard(
-                    summary = summary,
-                    isLatest = summary.id == latestId,
-                    isInitiallyExpanded = summary.id == latestId,
-                    onCopy = { clipboardManager.setText(AnnotatedString(summary.content)) }
-                )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(
+                    items = recordingDetail.segments,
+                    key = { it.id ?: it.hashCode() }
+                ) { segment ->
+                    TranscriptSegmentItem(
+                        segment = segment,
+                        isPlaying = false,
+                        isPlayed = false,
+                        onClick = {}
+                    )
+                }
             }
-        }
-
-        if (sortedSummaries.isNotEmpty()) {
+            
             ActionButtons(
-                hasContent = true,
-                onCopy = { 
-                    val allText = sortedSummaries.joinToString("\n\n") { s -> 
-                        val title = getTemplateTitle(s.mode)
-                        "--- $title ---\n${s.content}" 
-                    }
-                    clipboardManager.setText(AnnotatedString(allText)) 
-                },
-                onExport = { /* TODO: Export summary */ },
-                copyText = "复制全部摘要",
+                hasContent = recordingDetail.segments.isNotEmpty(),
+                onCopy = { clipboardManager.setText(AnnotatedString(fullText)) },
+                onExport = { /* TODO: Export transcript */ },
+                copyText = stringResource(R.string.copy_text),
                 exportText = stringResource(R.string.export_md)
             )
         }
@@ -379,196 +466,17 @@ fun SummaryContent(
 }
 
 @Composable
-private fun ExpandableSummaryCard(
-    summary: com.airecorder.android.data.model.Summary,
-    isLatest: Boolean,
-    isInitiallyExpanded: Boolean,
-    onCopy: () -> Unit
-) {
-    var isExpanded by remember { mutableStateOf(isInitiallyExpanded) }
-    val rotationState by animateFloatAsState(targetValue = if (isExpanded) 180f else 0f, label = "rotation")
-    val wordCount = summary.content.length 
-    val previewText = summary.content.take(60).replace("\n", " ") + "..."
-    val summaryTitle = getTemplateTitle(summary.mode)
-
-    Card(
-        modifier = Modifier.fillMaxWidth().animateContentSize(),
-        colors = CardDefaults.cardColors(containerColor = Surface),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { isExpanded = !isExpanded }
-                    .padding(16.dp),
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.Top,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        modifier = Modifier.rotate(rotationState).size(20.dp).padding(top = 2.dp),
-                        tint = TextTertiary
-                    )
-                    
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = summaryTitle,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = OnSurface
-                            )
-                            if (isLatest) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Surface(
-                                    color = StatusInfoLight.copy(alpha = 0.5f),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text(
-                                        text = "最新",
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = StatusInfo,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                        
-                        Text(
-                            text = "${if (summary.createdAt != null) FormatUtils.formatShortDate(summary.createdAt) else "AI Generated"} · 约 $wordCount 字",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextTertiary,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-
-                        if (!isExpanded) {
-                            Row(
-                                modifier = Modifier.padding(top = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Surface(
-                                    color = PrimaryContainer.copy(alpha = 0.5f),
-                                    shape = RoundedCornerShape(4.dp)
-                                ) {
-                                    Text(
-                                        text = "预览",
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Primary,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Text(
-                                    text = previewText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-                
-                IconButton(onClick = onCopy, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = null, tint = TextTertiary, modifier = Modifier.size(16.dp))
-                }
-            }
-
-            AnimatedVisibility(visible = isExpanded) {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    HorizontalDivider(color = DividerLight, thickness = 1.dp)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    RichText(modifier = Modifier.fillMaxWidth()) {
-                        Markdown(summary.content)
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-            }
-        }
-    }
-}
-
-/**
- * Maps template IDs to human-readable titles.
- */
-private fun getTemplateTitle(templateId: String?): String {
-    return when (templateId) {
-        "meeting" -> "会议纪要"
-        "todo" -> "待办事项"
-        "structure" -> "结构化摘要"
-        "regular" -> "转写内容规整"
-        else -> "AI 摘要"
-    }
-}
-
-@Composable
-fun InfoContent(
-    data: com.airecorder.android.data.model.RecordingDetail
-) {
-    val recording = data.recording
-
-    ContentCard {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            InfoSection(
-                title = stringResource(R.string.basic_info),
-                items = listOf(
-                    stringResource(R.string.filename) to recording.filename,
-                    stringResource(R.string.duration) to FormatUtils.formatDuration(recording.durationSeconds),
-                    stringResource(R.string.file_size) to FormatUtils.formatFileSize(recording.fileSizeBytes),
-                    stringResource(R.string.format) to (recording.format ?: stringResource(R.string.unknown))
-                )
-            )
-
-            InfoSection(
-                title = stringResource(R.string.timing_info),
-                items = listOf(
-                    stringResource(R.string.created_at) to FormatUtils.formatDate(recording.createdAt),
-                    stringResource(R.string.updated_at) to FormatUtils.formatDate(recording.updatedAt)
-                )
-            )
-
-            InfoSection(
-                title = stringResource(R.string.status_info),
-                items = listOf(
-                    stringResource(R.string.status) to when {
-                        recording.isCompleted -> stringResource(R.string.status_completed)
-                        recording.isProcessing -> stringResource(R.string.status_processing)
-                        recording.isError -> stringResource(R.string.status_error)
-                        else -> stringResource(R.string.status_pending)
-                    }
-                )
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProcessingIndicator(
+fun ProcessingIndicator(
     isProcessing: Boolean,
     message: String
 ) {
     AnimatedVisibility(visible = isProcessing) {
         Card(
             modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(
-                containerColor = PrimaryContainer
-            ),
-            shape = RoundedCornerShape(12.dp)
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            )
         ) {
             Row(
                 modifier = Modifier.padding(16.dp),
@@ -577,13 +485,13 @@ private fun ProcessingIndicator(
             ) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
-                    color = Primary,
+                    color = MaterialTheme.colorScheme.primary,
                     strokeWidth = 2.dp
                 )
                 Text(
                     text = message,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Primary
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }
@@ -591,110 +499,7 @@ private fun ProcessingIndicator(
 }
 
 @Composable
-private fun EmptyContentCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    subtitle: String
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = DividerLight.copy(alpha = 0.3f)
-        ),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = TextTertiary
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = TextSecondary
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = TextTertiary,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-        }
-    }
-}
-
-@Composable
-private fun ContentCard(
-    content: @Composable () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Surface),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        content()
-    }
-}
-
-@Composable
-private fun TranscriptSegmentCard(
-    segment: com.airecorder.android.data.model.TranscriptSegment,
-    isFirst: Boolean
-) {
-    Column(
-        modifier = Modifier
-            .padding(vertical = if (isFirst) 0.dp else 8.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = segment.speaker ?: "Speaker",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = Primary
-            )
-            Text(
-                text = FormatUtils.formatDuration(segment.startTime),
-                style = MaterialTheme.typography.bodySmall,
-                color = TextTertiary
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Surface(
-            color = DividerLight.copy(alpha = 0.4f),
-            shape = RoundedCornerShape(
-                topStart = 4.dp,
-                topEnd = 12.dp,
-                bottomEnd = 12.dp,
-                bottomStart = 12.dp
-            ),
-            modifier = Modifier.padding(end = 16.dp)
-        ) {
-            Text(
-                text = segment.text,
-                style = MaterialTheme.typography.bodyLarge,
-                color = TextPrimary,
-                modifier = Modifier.padding(16.dp),
-                lineHeight = 24.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun ActionButtons(
+fun ActionButtons(
     hasContent: Boolean,
     onCopy: () -> Unit,
     onExport: () -> Unit,
@@ -709,8 +514,7 @@ private fun ActionButtons(
             onClick = onCopy,
             modifier = Modifier.weight(1f),
             enabled = hasContent,
-            shape = RoundedCornerShape(12.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Divider)
+            shape = RoundedCornerShape(12.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.ContentCopy,
@@ -718,19 +522,15 @@ private fun ActionButtons(
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = copyText,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Medium
-            )
+            Text(copyText)
         }
-
+        
         Button(
             onClick = onExport,
             modifier = Modifier.weight(1f),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Primary,
-                contentColor = OnPrimary
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
             ),
             enabled = hasContent,
             shape = RoundedCornerShape(12.dp)
@@ -741,67 +541,14 @@ private fun ActionButtons(
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = exportText,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
-}
-
-@Composable
-private fun InfoSection(
-    title: String,
-    items: List<Pair<String, String>>
-) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = TextTertiary,
-            letterSpacing = 0.5.sp
-        )
-        Column {
-            items.forEachIndexed { index, (label, value) ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary
-                    )
-                    Text(
-                        text = value,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = TextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                if (index < items.size - 1) {
-                    HorizontalDivider(
-                        color = DividerLight,
-                        thickness = 1.dp
-                    )
-                }
-            }
+            Text(exportText)
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SummaryTemplateBottomSheet(
+fun SummaryTemplateBottomSheet(
     templates: List<Map<String, String>>,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit
@@ -809,7 +556,7 @@ private fun SummaryTemplateBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Surface,
+        containerColor = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
@@ -842,7 +589,7 @@ private fun SummaryTemplateBottomSheet(
 }
 
 @Composable
-private fun TemplateCard(
+fun TemplateCard(
     name: String,
     description: String?,
     onClick: () -> Unit
@@ -850,9 +597,8 @@ private fun TemplateCard(
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Surface),
         shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -867,43 +613,9 @@ private fun TemplateCard(
                 Text(
                     text = it,
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
-    }
-}
-
-private fun parseTimestampToMillis(timestamp: String): Long {
-    return try {
-        var ts = timestamp
-        if (ts.endsWith("Z")) {
-            ts = ts.substring(0, ts.length - 1)
-        }
-        if (ts.contains(".")) {
-            ts = ts.substring(0, ts.indexOf("."))
-        }
-        val parts = ts.split("T")
-        if (parts.size == 2) {
-            val dateParts = parts[0].split("-")
-            val timeParts = parts[1].split(":")
-            if (dateParts.size == 3 && timeParts.size >= 2) {
-                val year = dateParts[0].toInt()
-                val month = dateParts[1].toInt()
-                val day = dateParts[2].toInt()
-                val hour = timeParts[0].toInt()
-                val minute = timeParts[1].toInt()
-                val second = if (timeParts.size > 2) timeParts[2].toInt() else 0
-                val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
-                calendar.set(year, month - 1, day, hour, minute, second)
-                calendar.timeInMillis
-            } else {
-                0L
-            }
-        } else {
-            0L
-        }
-    } catch (e: Exception) {
-        0L
     }
 }

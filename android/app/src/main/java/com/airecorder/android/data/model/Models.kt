@@ -1,5 +1,11 @@
 package com.airecorder.android.data.model
 
+import androidx.compose.ui.graphics.Color
+import com.airecorder.android.ui.theme.StatusSuccess
+import com.airecorder.android.ui.theme.StatusWarning
+import com.airecorder.android.ui.theme.StatusError
+import com.airecorder.android.ui.theme.TranscribeStatus
+import com.airecorder.android.ui.theme.TextTertiary
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -32,7 +38,52 @@ data class Recording(
     
     val isError: Boolean
         get() = status == "error" || status == "failed"
+    
+    val statusLabel: String
+        get() = when (status) {
+            "uploaded" -> "待转写"
+            "queued" -> "排队中"
+            "normalizing" -> "处理中"
+            "transcribing" -> "转写中"
+            "transcribed" -> "已转写"
+            "completed" -> "已摘要"
+            "cancelled" -> "已取消"
+            "error" -> "错误"
+            else -> status
+        }
+    
+    val statusColor: Color
+        get() = when (status) {
+            "completed" -> StatusSuccess
+            "transcribed" -> TranscribeStatus
+            "uploaded", "cancelled" -> TextTertiary
+            "queued", "normalizing", "transcribing" -> StatusWarning
+            "error" -> StatusError
+            else -> TextTertiary
+        }
 }
+
+@Serializable
+data class WatchEvent(
+    val id: String,
+    @SerialName("file_path")
+    val filePath: String,
+    val filename: String,
+    val status: String,
+    val reason: String? = null,
+    @SerialName("recording_id")
+    val recordingId: String? = null,
+    @SerialName("duplicate_of_id")
+    val duplicateOfId: String? = null,
+    @SerialName("content_hash")
+    val contentHash: String? = null,
+    @SerialName("file_size")
+    val fileSize: Int? = null,
+    @SerialName("file_mtime")
+    val fileMtime: Double? = null,
+    @SerialName("created_at")
+    val createdAt: String
+)
 
 @Serializable
 data class TranscriptSegment(

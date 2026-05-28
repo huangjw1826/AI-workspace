@@ -2,6 +2,7 @@ package com.airecorder.android.data.remote
 
 import com.airecorder.android.data.model.*
 import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -57,4 +58,17 @@ interface ApiService {
     
     @GET("/api/settings/storage")
     suspend fun getStorageSettings(): Response<StorageSettings>
+    
+    @Streaming
+    @GET("/api/recordings/{id}/audio")
+    suspend fun downloadAudio(
+        @Path("id") id: String,
+        @Header("Range") range: String? = null
+    ): Response<ResponseBody>
+    
+    @GET("/api/watch/events")
+    suspend fun getWatchEvents(
+        @Query("limit") limit: Int = 100,
+        @Query("offset") offset: Int = 0
+    ): Response<List<WatchEvent>>
 }

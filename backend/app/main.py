@@ -15,11 +15,13 @@ from app.api.settings import router as settings_router
 from app.api.summary import export_router as summary_export_router
 from app.api.summary import router as summary_router
 from app.api.tasks import router as tasks_router
+from app.api.tokens import router as tokens_router
 from app.api.transcribe import router as transcribe_router
 from app.api.watch import router as watch_router
 from app.config import get_settings
 from app.db.database import engine, init_db
 from app.middleware.exception_handler import ExceptionHandlerMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.services.runtime_log import configure_logging
 from app.services.task_service import recover_interrupted_tasks
 from app.services.watch_service import watcher
@@ -55,7 +57,16 @@ def register_frontend_routes(app: FastAPI) -> None:
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="AI Recorder", version="3.1.0")
+    # 生产环境禁用 OpenAPI 文档
+    app_kwargs = {"title": "AI Recorder", "version": "3.1.0"}
+    if settings.app_env == "production":
+        app_kwargs.update({
+            "docs_url": None,
+            "redoc_url": None,
+            "openapi_url": None,
+        })
+    app = FastAPI(**app_kwargs)
+    app.add_middleware(SecurityHeadersMiddleware)  # 安全头优先
     app.add_middleware(ExceptionHandlerMiddleware)
     app.add_middleware(LocalBypassTokenMiddleware, api_token=settings.api_token)
     app.add_middleware(
@@ -75,6 +86,7 @@ def create_app() -> FastAPI:
     app.include_router(tasks_router)
     app.include_router(settings_router)
     app.include_router(watch_router)
+    app.include_router(tokens_router)
     register_frontend_routes(app)
 
     @app.on_event("startup")

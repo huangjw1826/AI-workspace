@@ -1,6 +1,7 @@
 package com.airecorder.android.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.WindowInsets
@@ -15,6 +16,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.airecorder.android.ui.animation.PageTransitions
 import com.airecorder.android.ui.components.BottomNavigationBar
 import com.airecorder.android.ui.components.ToastContainer
 import com.airecorder.android.ui.components.rememberToastManagerState
@@ -23,7 +25,9 @@ import com.airecorder.android.ui.screens.DetailScreen
 import com.airecorder.android.ui.screens.LibraryScreen
 import com.airecorder.android.ui.screens.SettingsScreen
 import com.airecorder.android.ui.screens.UploadBottomSheet
+import com.airecorder.android.ui.screens.watch.WatchScreen
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun AIRecorderApp(
     navController: NavHostController = rememberNavController(),
@@ -40,6 +44,7 @@ fun AIRecorderApp(
     // 判断是否需要显示底部导航栏（仅在主页面显示）
     val showBottomBar = when (currentDestination) {
         NavDestinations.Library.route,
+        NavDestinations.Watch.route,
         NavDestinations.Settings.route -> true
         else -> false
     }
@@ -47,6 +52,7 @@ fun AIRecorderApp(
     // 获取当前导航目标，用于底部导航栏高亮
     val currentNavDest = when (currentDestination) {
         NavDestinations.Library.route -> NavDestinations.Library
+        NavDestinations.Watch.route -> NavDestinations.Watch
         NavDestinations.Settings.route -> NavDestinations.Settings
         else -> NavDestinations.Library // 默认
     }
@@ -99,18 +105,47 @@ fun AIRecorderApp(
                 startDestination = NavDestinations.Library.route,
                 modifier = Modifier.fillMaxSize()
             ) {
-                composable(NavDestinations.Library.route) {
+                composable(
+                    route = NavDestinations.Library.route,
+                    enterTransition = { PageTransitions.popEnterTransition },
+                    exitTransition = { PageTransitions.exitTransition },
+                    popEnterTransition = { PageTransitions.popEnterTransition },
+                    popExitTransition = { PageTransitions.popExitTransition }
+                ) {
                     LibraryScreen(
                         onNavigateToDetail = actions.navigateToDetail
                     )
                 }
-                composable(NavDestinations.Settings.route) {
+                composable(
+                    route = NavDestinations.Watch.route,
+                    enterTransition = { PageTransitions.enterTransition },
+                    exitTransition = { PageTransitions.exitTransition },
+                    popEnterTransition = { PageTransitions.popEnterTransition },
+                    popExitTransition = { PageTransitions.popExitTransition }
+                ) {
+                    WatchScreen(
+                        onNavigateBack = actions.navigateBack
+                    )
+                }
+                composable(
+                    route = NavDestinations.Settings.route,
+                    enterTransition = { PageTransitions.enterTransition },
+                    exitTransition = { PageTransitions.exitTransition },
+                    popEnterTransition = { PageTransitions.popEnterTransition },
+                    popExitTransition = { PageTransitions.popExitTransition }
+                ) {
                     SettingsScreen(
                         onNavigateBack = actions.navigateBack,
                         onNavigateToLibrary = actions.navigateToLibrary
                     )
                 }
-                composable(NavDestinations.Detail.route) { backStackEntry ->
+                composable(
+                    route = NavDestinations.Detail.route,
+                    enterTransition = { PageTransitions.enterTransition },
+                    exitTransition = { PageTransitions.exitTransition },
+                    popEnterTransition = { PageTransitions.popEnterTransition },
+                    popExitTransition = { PageTransitions.popExitTransition }
+                ) { backStackEntry ->
                     val recordingId = backStackEntry.arguments?.getString("recordingId") ?: ""
                     DetailScreen(
                         recordingId = recordingId,
@@ -133,6 +168,16 @@ fun AIRecorderApp(
 private class AppActions(navController: NavHostController) {
     val navigateToDetail: (String) -> Unit = { recordingId ->
         navController.navigate(NavDestinations.Detail.createRoute(recordingId))
+    }
+    
+    val navigateToWatch: () -> Unit = {
+        navController.navigate(NavDestinations.Watch.route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
+            }
+            launchSingleTop = true
+            restoreState = true
+        }
     }
     
     val navigateToSettings: () -> Unit = {

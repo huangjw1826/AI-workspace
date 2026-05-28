@@ -5,8 +5,11 @@ import time
 from pathlib import Path
 
 from fastapi import APIRouter
+from sqlmodel import Session, select
 
 from app.config import get_settings
+from app.db.database import engine
+from app.models.api_token import ApiToken
 from app.services.audio_service import AudioService
 from app.services.runtime_log import recent_errors
 
@@ -57,6 +60,21 @@ def _get_disk_info(path: Path) -> dict[str, int]:
 def _get_uptime_seconds() -> float:
     """获取运行时长（秒）"""
     return time.time() - _start_time
+
+
+def _is_auth_required() -> bool:
+    """Check if authentication is required for remote requests."""
+    settings = get_settings()
+    if settings.api_token:
+        return True
+    try:
+        with Session(engine) as session:
+            statement = select(ApiToken).where(ApiToken.is_active == True)
+            if session.exec(statement).first():
+                return True
+    except Exception:
+        pass
+    return False
 
 
 @router.get("/health")
@@ -113,6 +131,7 @@ def health() -> dict[str, object]:
         "llm_configured": llm_configured,
         "log_dir": log_dir,
         "recent_errors": recent,
+        "auth_required": _is_auth_required(),
         # 新增系统健康信息
         "system": {
             "cpu_percent": cpu_percent,
