@@ -550,6 +550,12 @@ def get_recording(recording_id: str, session: Session = Depends(get_session)) ->
         .order_by(Summary.created_at.desc())
     ).all()
     tasks = session.exec(select(Task).where(Task.recording_id == recording_id)).all()
+    if summaries and recording.status != "completed":
+        recording.status = "completed"
+        recording.updated_at = datetime.now(timezone.utc)
+        session.add(recording)
+        session.commit()
+        session.refresh(recording)
     return {
         "recording": recording,
         "segments": segments,

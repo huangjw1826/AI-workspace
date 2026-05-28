@@ -70,6 +70,21 @@ export function summaryPreview(content: string) {
 
 export function taskLabel(task?: Task | null) {
   if (!task) return "";
+  if (task.status === "cancelled") {
+    if (task.task_type === "transcribe" || task.task_type === "transcription") return "转写已取消";
+    if (task.task_type.startsWith("summary:")) return "摘要已取消";
+    return `${task.task_type} 已取消`;
+  }
+  if (task.status === "completed") {
+    if (task.task_type === "transcribe" || task.task_type === "transcription") return "转写完成";
+    if (task.task_type.startsWith("summary:")) return "摘要生成完成";
+    return `${task.task_type} 完成`;
+  }
+  if (task.status === "error") {
+    if (task.task_type === "transcribe" || task.task_type === "transcription") return "转写失败";
+    if (task.task_type.startsWith("summary:")) return "摘要生成失败";
+    return `${task.task_type} 失败`;
+  }
   if (task.task_type === "transcribe" || task.task_type === "transcription") return "正在转写录音";
   if (task.task_type.startsWith("summary:")) return "正在生成摘要";
   return task.task_type;

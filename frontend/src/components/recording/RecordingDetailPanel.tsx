@@ -58,6 +58,11 @@ export function RecordingDetailPanel(props: {
     setEditingSegmentId(null);
     setSegmentDraft("");
     setTagDraft(selected.recording.tags);
+    setCurrentTime(0);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
   }, [selected?.recording.id, selected?.recording.tags, selected?.summaries.length]);
 
   if (!selected) {

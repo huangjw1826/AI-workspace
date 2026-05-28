@@ -58,23 +58,36 @@ def _finish_cancelled(session: Session, task: Task, recording: Recording | None 
 def _run_async_task(coro):
     """
     Safely run an async task from a synchronous context.
-    Creates a new event loop if none exists in the current thread.
+    Creates a new event loop if none exists or the existing one is closed.
     """
     import asyncio
+    import threading
+
+    def get_or_create_loop():
+        try:
+            loop = asyncio.get_event_loop()
+            if not loop.is_closed():
+                return loop
+        except RuntimeError:
+            pass
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        return new_loop
+
     try:
-        loop = asyncio.get_event_loop()
+        loop = get_or_create_loop()
         if loop.is_running():
-            # If there's already a running loop, we need to run in a new thread
-            import threading
             def run_in_thread():
-                new_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(new_loop)
+                new_loop = None
                 try:
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
                     new_loop.run_until_complete(coro)
                 except Exception as e:
                     logger.exception("Async task failed in background thread", exc_info=e)
                 finally:
-                    new_loop.close()
+                    if new_loop is not None and not new_loop.is_closed():
+                        new_loop.close()
             thread = threading.Thread(target=run_in_thread, daemon=True)
             thread.start()
         else:
@@ -82,16 +95,8 @@ def _run_async_task(coro):
                 loop.run_until_complete(coro)
             except Exception as e:
                 logger.exception("Async task failed", exc_info=e)
-    except RuntimeError:
-        # No event loop exists in current thread, create a new one
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(coro)
-        except Exception as e:
-            logger.exception("Async task failed", exc_info=e)
-        finally:
-            loop.close()
+    except Exception as e:
+        logger.exception("Async task failed", exc_info=e)
 
 
 async def _emit_task_started(task_id: str, recording_id: str, message: str) -> None:

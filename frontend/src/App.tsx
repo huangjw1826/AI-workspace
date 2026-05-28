@@ -347,8 +347,13 @@ export default function App() {
   }
 
   async function selectRecording(id: string) {
-    setSelected(await getRecording(id));
+    const detail = await getRecording(id);
+    setSelected(detail);
     setDetailTab("transcript");
+    const newActiveTask = detail.tasks.find(
+      (task) => !["completed", "error", "cancelled"].includes(task.status)
+    ) ?? null;
+    setActiveTask(newActiveTask);
   }
 
   function handleDelete(recordingId: string, event: React.MouseEvent) {
