@@ -75,6 +75,16 @@ class Settings(BaseSettings):
     api_token: str = ""
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    remote_access_enabled: bool = True
+    remote_access_provider: str = "cloudflare"
+    remote_access_hostname: str = ""
+    remote_access_tunnel_name: str = "ai-recorder"
+    remote_access_tunnel_id: str = ""
+    remote_access_config_path: str = ""
+    remote_access_pid_path: str = ""
+    remote_access_log_path: str = ""
+    remote_access_auto_start: bool = True
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @field_validator("llm_temperature", "llm_top_p", mode="before")

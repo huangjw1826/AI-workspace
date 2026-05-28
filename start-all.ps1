@@ -1,5 +1,6 @@
 param(
-    [switch]$OpenBrowser
+    [switch]$OpenBrowser,
+    [switch]$RemoteAccess
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,6 +23,10 @@ function Write-Ok($Message) {
 
 function Write-Warn($Message) {
     Write-Host "[WARN] $Message" -ForegroundColor Yellow
+}
+
+function Write-Error($Message) {
+    Write-Host "[ERROR] $Message" -ForegroundColor Red
 }
 
 function Test-PortOpen($Port) {
@@ -70,6 +75,57 @@ function Repair-ProcessEnvironment {
     }
 }
 
+function Start-RemoteAccess {
+    Write-Info "Starting remote access service..."
+    
+    $managerScript = "$Root\scripts\remote-access-manager.ps1"
+    if (-not (Test-Path -LiteralPath $managerScript)) {
+        Write-Warn "Remote access manager script not found: $managerScript"
+        return $false
+    }
+    
+    try {
+        $tunnelName = "ai-recorder"
+        $result = & "$managerScript" -Action start -TunnelName $tunnelName
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Ok "Remote access service started successfully"
+            return $true
+        }
+        else {
+            Write-Warn "Remote access service failed to start"
+            return $false
+        }
+    }
+    catch {
+        Write-Warn "Failed to start remote access: $_"
+        return $false
+    }
+}
+
+function Check-RemoteAccessConfig {
+    Write-Info "Checking remote access configuration..."
+    
+    $cloudflaredPath = "$Root\.tools\cloudflared.exe"
+    if (-not (Test-Path -LiteralPath $cloudflaredPath)) {
+        $cloudflaredPath = "C:\Program Files (x86)\cloudflared\cloudflared.exe"
+    }
+    
+    if (-not (Test-Path -LiteralPath $cloudflaredPath)) {
+        Write-Warn "cloudflared binary not found. Remote access may not work."
+        return $false
+    }
+    
+    $configPath = Join-Path $env:USERPROFILE ".cloudflared\config.yml"
+    if (-not (Test-Path -LiteralPath $configPath)) {
+        Write-Warn "Cloudflare config not found at: $configPath"
+        return $false
+    }
+    
+    Write-Ok "Remote access configuration is ready"
+    return $true
+}
+
 Repair-ProcessEnvironment
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 
@@ -115,8 +171,15 @@ if (!(Wait-HttpOk "http://127.0.0.1:8000/" 20)) {
     throw "Frontend shell failed to load from backend. Run .\check.ps1 to inspect the project."
 }
 
-Write-Ok "AI Recorder started"
-Write-Host "App: http://127.0.0.1:8000"
+Write-Ok "AI Recorder backend started"
+Write-Host "Local App: http://127.0.0.1:8000"
+
+if ($RemoteAccess) {
+    if (Check-RemoteAccessConfig) {
+        Start-RemoteAccess
+    }
+}
+
 Write-Host ""
 Write-Host "Open this URL in your browser: http://127.0.0.1:8000"
 

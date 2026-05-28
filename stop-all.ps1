@@ -11,6 +11,31 @@ $PidFiles = @(
     "$LogDir\rerun-transcribe-task.pid"
 )
 
+function Write-Info($Message) {
+    Write-Host "[INFO] $Message"
+}
+
+function Write-Ok($Message) {
+    Write-Host "[OK] $Message" -ForegroundColor Green
+}
+
+function Stop-RemoteAccess {
+    Write-Info "Stopping remote access service..."
+    
+    $managerScript = "$Root\scripts\remote-access-manager.ps1"
+    if (Test-Path -LiteralPath $managerScript) {
+        try {
+            & "$managerScript" -Action stop
+            if ($LASTEXITCODE -eq 0) {
+                Write-Ok "Remote access service stopped"
+            }
+        }
+        catch {
+            Write-Info "Failed to stop remote access via manager script: $_"
+        }
+    }
+}
+
 function Stop-PidFile($Path) {
     if (!(Test-Path -LiteralPath $Path)) {
         return
@@ -20,13 +45,15 @@ function Stop-PidFile($Path) {
     if ($pidValue -match "^\d+$") {
         $process = Get-Process -Id ([int]$pidValue) -ErrorAction SilentlyContinue
         if ($process) {
-            Write-Host "[INFO] Stopping PID $pidValue ($($process.ProcessName))"
+            Write-Info "Stopping PID $pidValue ($($process.ProcessName))"
             Stop-Process -Id ([int]$pidValue) -Force -ErrorAction SilentlyContinue
         }
     }
 
     Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
 }
+
+Stop-RemoteAccess
 
 foreach ($file in $PidFiles) {
     Stop-PidFile $file
@@ -40,10 +67,10 @@ foreach ($port in @(8000, 5173)) {
     foreach ($owner in $owners) {
         $process = Get-Process -Id $owner -ErrorAction SilentlyContinue
         if ($process) {
-            Write-Host "[INFO] Releasing port $port from PID $owner ($($process.ProcessName))"
+            Write-Info "Releasing port $port from PID $owner ($($process.ProcessName))"
             Stop-Process -Id $owner -Force -ErrorAction SilentlyContinue
         }
     }
 }
 
-Write-Host "[OK] AI Recorder services stopped."
+Write-Ok "AI Recorder services stopped."

@@ -23,6 +23,7 @@ from app.db.database import engine, init_db
 from app.middleware.exception_handler import ExceptionHandlerMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.services.runtime_log import configure_logging
+from app.services.remote_access import remote_access_manager
 from app.services.task_service import recover_interrupted_tasks
 from app.services.watch_service import watcher
 
@@ -92,28 +93,66 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def on_startup() -> None:
         configure_logging()
+        logger = None
+        
         try:
             init_db()
         except Exception as exc:
             from app.services.runtime_log import get_logger
-            get_logger().error("Database initialization failed: %s", exc)
+            logger = get_logger()
+            logger.error("Database initialization failed: %s", exc)
 
         try:
             with Session(engine) as session:
                 recover_interrupted_tasks(session)
         except Exception as exc:
-            from app.services.runtime_log import get_logger
-            get_logger().error("Task recovery failed: %s", exc)
+            if not logger:
+                from app.services.runtime_log import get_logger
+                logger = get_logger()
+            logger.error("Task recovery failed: %s", exc)
 
         try:
             watcher.start()
         except Exception as exc:
-            from app.services.runtime_log import get_logger
-            get_logger().error("Watcher start failed: %s", exc)
+            if not logger:
+                from app.services.runtime_log import get_logger
+                logger = get_logger()
+            logger.error("Watcher start failed: %s", exc)
+
+        if settings.remote_access_enabled and settings.remote_access_auto_start:
+            try:
+                if not logger:
+                    from app.services.runtime_log import get_logger
+                    logger = get_logger()
+                logger.info("Attempting to start remote access service...")
+                await remote_access_manager.start()
+                status = remote_access_manager.status
+                if status.running:
+                    logger.info("Remote access service started successfully")
+                    if status.hostname:
+                        logger.info("Remote access hostname: %s", status.hostname)
+                else:
+                    logger.warning("Remote access service failed to start: %s", status.error)
+            except Exception as exc:
+                if not logger:
+                    from app.services.runtime_log import get_logger
+                    logger = get_logger()
+                logger.error("Failed to start remote access service: %s", exc)
 
     @app.on_event("shutdown")
     async def on_shutdown() -> None:
+        from app.services.runtime_log import get_logger
+        logger = get_logger()
+        
         await watcher.stop()
+        
+        if settings.remote_access_enabled:
+            try:
+                logger.info("Stopping remote access service...")
+                await remote_access_manager.stop()
+                logger.info("Remote access service stopped successfully")
+            except Exception as exc:
+                logger.error("Failed to stop remote access service: %s", exc)
 
     return app
 

@@ -20,8 +20,9 @@ class AuthInterceptor @Inject constructor(
         val serverUrl = runBlocking { tokenProvider.getServerUrl().first() }
         
         val requestBuilder = originalRequest.newBuilder()
+            .header("User-Agent", "AI Recorder Android/1.0.0")
         
-        if (token.isNotBlank() && !originalRequest.url.pathSegments.contains("health")) {
+        if (token.isNotBlank()) {
             requestBuilder.header("X-API-Token", token)
         }
         

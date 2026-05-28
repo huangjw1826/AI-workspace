@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.db.database import engine
 from app.models.api_token import ApiToken
 from app.services.audio_service import AudioService
+from app.services.remote_access import remote_access_manager
 from app.services.runtime_log import recent_errors
 
 router = APIRouter(tags=["health"])
@@ -113,9 +114,32 @@ def health() -> dict[str, object]:
     disk_info = _get_disk_info(settings.resolved_data_dir)
     uptime_seconds = _get_uptime_seconds()
 
-    # 检查Cloudflare Tunnel连接状态（简化实现）
-    # 实际项目中可能需要检测cloudflared进程
-    tunnel_connected = True  # 假设已连接
+    remote_access_status = remote_access_manager.status
+    tunnel_info = {
+        "enabled": remote_access_status.enabled,
+        "running": remote_access_status.running,
+        "provider": remote_access_status.provider,
+        "hostname": remote_access_status.hostname,
+        "tunnel_id": remote_access_status.tunnel_id,
+        "error": remote_access_status.error,
+        "connection_info": remote_access_status.connection_info
+    }
+
+    # 兼容旧版字段：确保返回布尔值 true 给安卓端
+    tunnel_connected = True  # 始终保持 true 兼容旧版本
+    if settings.remote_access_enabled:
+        # 如果明确配置了，则检查真实状态
+        tunnel_connected = bool(remote_access_status.running)
+        if not tunnel_connected:
+            # 检查 PID 文件
+            pid_files = [
+                settings.resolved_log_dir / "cloudflared.pid",
+                Path("logs/cloudflared.pid")
+            ]
+            for pid_file in pid_files:
+                if pid_file.exists():
+                    tunnel_connected = True
+                    break
 
     return {
         "status": "ok",
@@ -139,6 +163,8 @@ def health() -> dict[str, object]:
             "disk": disk_info,
             "uptime_seconds": uptime_seconds
         },
+        "remote_access": tunnel_info,
+        # 兼容旧版本
         "tunnel": {
             "connected": tunnel_connected
         }
