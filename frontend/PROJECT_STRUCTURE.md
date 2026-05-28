@@ -59,6 +59,9 @@ frontend/
 │   │   ├── LibraryPage.tsx        # 录音库页面
 │   │   ├── SettingsPage.tsx       # 设置页面
 │   │   └── WatchPage.tsx          # 目录监控页面
+│   ├── stores/                     # 状态管理
+│   │   ├── appStore.ts            # 应用全局状态
+│   │   └── taskStore.ts           # 任务状态管理
 │   ├── App.tsx                    # 应用主组件
 │   ├── main.tsx                   # 应用入口
 │   └── styles.css                 # 全局样式

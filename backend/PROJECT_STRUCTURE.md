@@ -62,6 +62,7 @@ backend/
 │   │   ├── export_names.py           # 导出文件名生成
 │   │   ├── file_service.py           # 文件操作服务
 │   │   ├── runtime_log.py            # 运行时日志服务
+│   │   ├── sse_service.py            # SSE 事件推送服务
 │   │   ├── summary_service.py        # 摘要服务（大模型）
 │   │   ├── task_service.py           # 任务管理服务
 │   │   └── watch_service.py          # 目录监控服务
