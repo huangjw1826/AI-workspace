@@ -1,5 +1,43 @@
 # AI Recorder 更改日志
 
+## 2026-05-28 项目文档规范化整理
+
+本次改动对项目文档进行全面梳理和规范化整理，使 README 和 PROJECT_STRUCTURE 与项目最新状态保持一致。
+
+### Changed
+
+- 重写 `README.md`
+  - 新增当前版本标识（v3.0）和更新日志链接
+  - 核心特性新增 3.0 亮点功能（可靠任务、音频播放、转写校对）
+  - 更新功能概览表格，新增文件大小限制说明
+  - 项目结构精简为简洁版目录树
+  - 技术栈章节按 PC 后端、PC 前端、Android 端分三大类展示
+  - 相关文档表格新增技术栈、产品路线图、架构决策记录
+  - 新增版本历史章节，快速展示主要版本
+
+- 重写 `PROJECT_STRUCTURE.md`
+  - 整体架构精简，展示核心组件和数量
+  - 后端结构补充 `tokens.py`、`access_log.py`、`api_token.py` 等新增模块
+  - 后端结构补充 `exceptions/` 和 `middleware/` 目录
+  - 前端结构新增 `sse.ts` 客户端文件
+  - 新增 API 接口概览表格
+  - 新增数据存储章节，展示数据库表结构
+
+### Document Coverage
+
+- ✅ README.md - 项目概述和快速开始
+- ✅ PROJECT_STRUCTURE.md - 整体结构
+- ✅ CODE_WIKI.md - 代码详解
+- ✅ CHANGELOG.md - 变更记录
+- ✅ backend/PROJECT_STRUCTURE.md - 后端结构
+- ✅ frontend/PROJECT_STRUCTURE.md - 前端结构
+- ✅ android/PROJECT_STRUCTURE.md - Android 端结构
+- ✅ docs/TECH_STACK.md - 技术栈说明
+- ✅ docs/product/ - 产品路线图和版本规划
+- ✅ docs/decisions/ - 架构决策记录
+
+---
+
 ## 2026-05-27 项目文档全面更新
 
 本次改动更新所有项目说明性文档，确保文档与实际代码结构一致。

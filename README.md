@@ -2,6 +2,8 @@
 
 AI Recorder 是一个面向 Windows 本机的录音整理工具，集成音频入库、本地离线转写、云端大模型摘要、多格式导出和目录监控功能。同时提供原生 Android 客户端，支持远程访问 PC 端录音库。
 
+**当前版本：3.0** | [更新日志](./CHANGELOG.md) | [产品路线图](./docs/product/roadmap.md)
+
 ## 核心特性
 
 - 🎙️ **本地转写**：使用 FunASR 在本机完成中文语音转文字，隐私安全
@@ -10,14 +12,17 @@ AI Recorder 是一个面向 Windows 本机的录音整理工具，集成音频�
 - 📤 **多格式导出**：支持 Markdown、TXT、JSON、SRT、DOCX 等格式
 - 🔍 **智能搜索**：支持文件名、标签、转写内容全文搜索
 - 👁️ **目录监控**：自动发现并入库新音频文件
-- ⚡ **实时同步**：支持 SSE 实时事件推送，任务状态实时更新
+- ⚡ **实时同步**：SSE 实时推送任务进度和系统状态
+- 🎯 **可靠任务**：任务可复用、取消和恢复，避免重复处理
+- 🎧 **音频播放**：点击时间戳跳转播放位置，播放时高亮当前片段
+- ✏️ **转写校对**：可视化编辑转写片段，保存后用于摘要和导出
 
 ## 功能概览
 
 | 模块 | 功能 |
 |------|------|
 | **录音库管理** | 集中管理音频文件、时长、来源、创建时间和处理状态 |
-| **文件上传** | 支持 `wav`、`mp3`、`m4a`、`flac`、`aac`、`ogg` 等格式 |
+| **文件上传** | 支持 `wav`、`mp3`、`m4a`、`flac`、`aac`、`ogg` 等格式（最大 500MB） |
 | **音频播放** | 原生播放器，支持点击转写时间戳跳转播放位置 |
 | **转写校对** | 可视化编辑转写片段，支持实时保存 |
 | **本地转写** | FunASR 离线转写，无需上传云端 |
@@ -32,42 +37,46 @@ AI Recorder 是一个面向 Windows 本机的录音整理工具，集成音频�
 
 ```
 AI-workspace/
-├── backend/           # FastAPI 后端服务
-│   ├── app/           # 应用代码
-│   │   ├── api/       # API 路由
-│   │   ├── services/  # 业务服务
-│   │   ├── models/    # 数据模型
-│   │   └── db/        # 数据库层
-│   ├── tests/         # 单元测试
-│   └── PROJECT_STRUCTURE.md
-├── frontend/          # React 前端应用
+├── backend/              # FastAPI 后端服务
+│   ├── app/
+│   │   ├── api/        # API 路由（认证、录音、转写、摘要、任务等）
+│   │   ├── services/    # 业务服务（ASR、音频、摘要、任务、监控等）
+│   │   ├── models/      # 数据模型（SQLModel）
+│   │   ├── pipeline/    # 工作流编排
+│   │   └── db/          # 数据库层
+│   ├── tests/           # 单元测试
+│   └── requirements.txt
+├── frontend/             # React 前端应用
 │   ├── src/
-│   │   ├── pages/     # 页面组件
-│   │   ├── components/# 可复用组件
-│   │   └── lib/       # 工具函数
-│   └── PROJECT_STRUCTURE.md
-├── android/           # Android 原生客户端
-│   ├── app/src/main/
-│   │   ├── java/      # Kotlin 代码
-│   │   └── res/       # 资源文件
-│   ├── PROJECT_STRUCTURE.md
-│   └── README.md
-├── data/              # 数据库、音频、转写和摘要数据
-├── models/            # FunASR 离线模型缓存
-├── logs/              # 运行日志
-├── docs/              # 项目文档
-├── scripts/           # 辅助脚本
+│   │   ├── pages/      # 页面组件（录音库、监控、设置、健康）
+│   │   ├── components/ # 可复用组件
+│   │   ├── hooks/      # 自定义 Hooks
+│   │   ├── lib/        # 工具函数和 API 客户端
+│   │   └── stores/      # 状态管理
+│   └── package.json
+├── android/              # Android 原生客户端
+│   ├── app/src/main/java/com/airecorder/android/
+│   │   ├── data/       # 数据层（Repository、ApiService、DataStore）
+│   │   ├── di/         # 依赖注入（Hilt）
+│   │   └── ui/         # UI 层（Compose、ViewModel）
+│   └── build.gradle.kts
+├── data/                 # 数据库、音频、转写和摘要数据
+├── models/               # FunASR 离线模型缓存
+├── logs/                 # 运行日志
+├── docs/                 # 项目文档
+│   ├── product/         # 产品路线图和版本规划
+│   ├── decisions/       # 架构决策记录（ADR）
+│   └── *.md            # 各类说明文档
+├── scripts/              # 辅助脚本
 ├── PROJECT_STRUCTURE.md  # 整体项目结构说明
-├── CODE_WIKI.md       # 代码维基
-├── CHANGELOG.md       # 变更日志
-└── README.md          # 本文件
+├── CODE_WIKI.md          # 代码维基
+├── CHANGELOG.md          # 变更日志
+└── README.md             # 本文件
 ```
 
 ## 快速开始
 
 ### 环境要求
-
-当前项目主要面向 **Windows 10/11**。请先安装以下工具：
 
 - Python 3.10 ~ 3.12
 - Node.js 20+
@@ -146,36 +155,53 @@ LLM_TIMEOUT_SECONDS=60
 
 ## 技术栈
 
-| 层级 | 技术 | 版本 |
-|------|------|------|
-| **后端** | Python | 3.10+ |
-|  | FastAPI | - |
-|  | SQLModel | - |
-|  | SQLite | - |
-|  | FunASR | - |
-| **前端** | React | 19 |
-|  | TypeScript | - |
-|  | Vite | - |
-|  | Lucide React | - |
-| **Android** | Kotlin | - |
-|  | Jetpack Compose | - |
-|  | Material Design 3 | - |
-|  | Retrofit | - |
-|  | Hilt | - |
-|  | DataStore Preferences | - |
+### PC 端 - 后端
+
+| 技术 | 说明 |
+|------|------|
+| Python 3.10+ | 编程语言 |
+| FastAPI | Web 框架 |
+| SQLModel | ORM |
+| SQLite | 数据库 |
+| FunASR | 语音转写 |
+| FFmpeg | 音频处理 |
+| OpenAI SDK | LLM 调用 |
+
+### PC 端 - 前端
+
+| 技术 | 说明 |
+|------|------|
+| React 19 | UI 框架 |
+| TypeScript | 类型安全 |
+| Vite | 构建工具 |
+| Lucide React | 图标库 |
+
+### Android 端
+
+| 技术 | 说明 |
+|------|------|
+| Kotlin | 编程语言 |
+| Jetpack Compose | UI 框架 |
+| Material Design 3 | 设计系统 |
+| Retrofit + OkHttp | 网络请求 |
+| Hilt | 依赖注入 |
+| DataStore | 本地存储 |
+| Kotlin Coroutines | 异步编程 |
+
+详细技术栈说明见 [docs/TECH_STACK.md](docs/TECH_STACK.md)
 
 ## 本地数据和隐私
 
 以下目录不会上传到 Git 仓库：
 
-```text
-backend/.env           # 环境变量（含 API Key）
-backend/.venv/         # Python 虚拟环境
-frontend/node_modules/ # Node.js 依赖
-frontend/dist/         # 前端构建产物
-data/                  # 数据库、录音、转写和摘要
-models/                # FunASR 模型缓存
-logs/                  # 运行日志
+```
+backend/.env            # 环境变量（含 API Key）
+backend/.venv/          # Python 虚拟环境
+frontend/node_modules/  # Node.js 依赖
+frontend/dist/          # 前端构建产物
+data/                   # 数据库、录音、转写和摘要
+models/                 # FunASR 模型缓存
+logs/                   # 运行日志
 ```
 
 **建议备份**：
@@ -223,12 +249,25 @@ Android 客户端支持远程访问 PC 端录音库：
 
 ## 相关文档
 
-- [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) - 整体项目结构
-- [backend/PROJECT_STRUCTURE.md](backend/PROJECT_STRUCTURE.md) - 后端详细结构
-- [frontend/PROJECT_STRUCTURE.md](frontend/PROJECT_STRUCTURE.md) - 前端详细结构
-- [android/PROJECT_STRUCTURE.md](android/PROJECT_STRUCTURE.md) - Android 端详细结构
-- [CODE_WIKI.md](CODE_WIKI.md) - 代码维基
-- [CHANGELOG.md](CHANGELOG.md) - 变更日志
+| 文档 | 说明 |
+|------|------|
+| [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) | 整体项目结构 |
+| [CODE_WIKI.md](CODE_WIKI.md) | 代码维基 |
+| [CHANGELOG.md](CHANGELOG.md) | 变更日志 |
+| [docs/TECH_STACK.md](docs/TECH_STACK.md) | 技术栈说明 |
+| [docs/product/roadmap.md](docs/product/roadmap.md) | 产品路线图 |
+| [backend/PROJECT_STRUCTURE.md](backend/PROJECT_STRUCTURE.md) | 后端详细结构 |
+| [frontend/PROJECT_STRUCTURE.md](frontend/PROJECT_STRUCTURE.md) | 前端详细结构 |
+| [android/PROJECT_STRUCTURE.md](android/PROJECT_STRUCTURE.md) | Android 端详细结构 |
+| [docs/decisions/](docs/decisions/) | 架构决策记录 |
+
+## 版本历史
+
+- **v3.0** (2026-05) - 任务可靠性、音频播放、转写校对、搜索标签、批量操作
+- **v2.0** (早期) - Android 远程访问支持
+- **v1.0** (早期) - 基础录音管理功能
+
+查看完整更新历史：[CHANGELOG.md](CHANGELOG.md)
 
 ## 许可证
 
