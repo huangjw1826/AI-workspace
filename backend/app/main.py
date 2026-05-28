@@ -1,3 +1,13 @@
+"""
+AI Recorder 后端应用入口
+
+FastAPI 应用工厂，负责：
+- 组装中间件（安全头、异常处理、认证、CORS）
+- 注册所有 API 路由（10 个功能模块）
+- 挂载前端静态文件（生产模式 SPA）
+- 启动生命周期管理（数据库初始化、任务恢复、监控/远程访问启停）
+"""
+
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -33,6 +43,12 @@ FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 
 
 def register_frontend_routes(app: FastAPI) -> None:
+    """注册前端 SPA 静态文件路由。
+
+    如果 frontend/dist 存在，挂载 /assets 静态目录，并配置 catch-all 路由
+    将所有非 API 请求回退到 index.html（支持 React Router SPA）。
+    包含路径遍历保护：resolve 后检查是否仍在 FRONTEND_DIST 内。
+    """
     if not FRONTEND_DIST.is_dir():
         return
 
@@ -57,6 +73,17 @@ def register_frontend_routes(app: FastAPI) -> None:
 
 
 def create_app() -> FastAPI:
+    """创建并配置 FastAPI 应用实例。
+
+    中间件注册顺序（重要）：
+    1. SecurityHeadersMiddleware - 安全响应头（最外层）
+    2. ExceptionHandlerMiddleware - 统一异常处理
+    3. LocalBypassTokenMiddleware - API Token 认证（本地请求免检）
+    4. CORSMiddleware - CORS 跨域
+
+    启动时依次执行：日志配置 → 数据库初始化 → 中断任务恢复 → 目录监控启动 → 远程访问启动
+    关闭时：停止监控 → 停止远程访问
+    """
     settings = get_settings()
     # 生产环境禁用 OpenAPI 文档
     app_kwargs = {"title": "AI Recorder", "version": "3.1.0"}
@@ -67,7 +94,9 @@ def create_app() -> FastAPI:
             "openapi_url": None,
         })
     app = FastAPI(**app_kwargs)
-    app.add_middleware(SecurityHeadersMiddleware)  # 安全头优先
+
+    # 安全头优先注册（最外层中间件）
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(ExceptionHandlerMiddleware)
     app.add_middleware(LocalBypassTokenMiddleware, api_token=settings.api_token)
     app.add_middleware(
@@ -77,6 +106,8 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # 注册 API 路由（按功能模块）
     app.include_router(events_router)
     app.include_router(health_router)
     app.include_router(filesystem_router)
@@ -88,13 +119,20 @@ def create_app() -> FastAPI:
     app.include_router(settings_router)
     app.include_router(watch_router)
     app.include_router(tokens_router)
+
+    # 挂载前端 SPA（必须在所有 API 路由之后）
     register_frontend_routes(app)
 
     @app.on_event("startup")
     async def on_startup() -> None:
+        """应用启动事件：按依赖顺序初始化各子系统。
+
+        各步骤独立 try/except，单个子系统失败不影响应用启动，
+        错误仅记录日志。恢复中断任务将遗留的 queued/running 任务标记为 error。
+        """
         configure_logging()
         logger = None
-        
+
         try:
             init_db()
         except Exception as exc:
@@ -141,11 +179,16 @@ def create_app() -> FastAPI:
 
     @app.on_event("shutdown")
     async def on_shutdown() -> None:
+        """应用关闭事件：按相反顺序停止各子系统。
+
+        先停止目录监控（防止新文件入库），再停止远程访问，
+        确保所有后台任务优雅退出。
+        """
         from app.services.runtime_log import get_logger
         logger = get_logger()
-        
+
         await watcher.stop()
-        
+
         if settings.remote_access_enabled:
             try:
                 logger.info("Stopping remote access service...")

@@ -1,3 +1,10 @@
+/**
+ * AI Recorder 前端 API 客户端
+ *
+ * 封装所有后端 API 调用，统一错误处理和响应类型。
+ * API Base URL 自动检测：Vite 开发模式使用 localhost:8000，生产模式使用同源。
+ */
+
 import type {
   HealthStatus,
   LlmConnectivityResult,
@@ -12,6 +19,8 @@ import type {
   WatchEvent,
   WatchSettings
 } from "./types";
+
+/** 自动检测 API 基础地址 */
 function defaultApiBaseUrl() {
   const configured = import.meta.env.VITE_API_BASE_URL;
   if (configured) return configured.replace(/\/+$/, "");
@@ -23,10 +32,12 @@ function defaultApiBaseUrl() {
 
 const API_BASE_URL = defaultApiBaseUrl();
 
+/** 拼接完整 API URL */
 export function apiUrl(path: string) {
   return `${API_BASE_URL}${path}`;
 }
 
+/** 通用请求封装：自动 JSON 解析和错误处理 */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   const response = await fetch(apiUrl(path), { ...init, headers });
@@ -37,6 +48,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+/** 从 Content-Disposition 响应头解析文件名（支持 UTF-8 和 ASCII 编码） */
 function filenameFromDisposition(disposition: string | null, fallback: string) {
   if (!disposition) return fallback;
   const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
@@ -45,6 +57,11 @@ function filenameFromDisposition(disposition: string | null, fallback: string) {
   return asciiMatch?.[1] ?? fallback;
 }
 
+/**
+ * 触发浏览器下载文件（Blob 方式）
+ * @param path API 路径
+ * @param fallbackName 无法从响应头获取文件名时的回退名称
+ */
 export async function downloadFile(path: string, fallbackName: string) {
   const headers = new Headers();
 
@@ -65,14 +82,25 @@ export async function downloadFile(path: string, fallbackName: string) {
   window.URL.revokeObjectURL(href);
 }
 
+// =====================================================================
+// 健康检查
+// =====================================================================
+
+/** 获取系统健康状态 */
 export function getHealth() {
   return request<HealthStatus>("/health");
 }
 
+// =====================================================================
+// LLM 设置
+// =====================================================================
+
+/** 获取 LLM 当前设置 */
 export function getLlmSettings() {
   return request<LlmSettings>("/api/settings/llm");
 }
 
+/** 更新 LLM 设置 */
 export function updateLlmSettings(settings: LlmSettingsUpdate) {
   return request<LlmSettings>("/api/settings/llm", {
     method: "PUT",
@@ -81,14 +109,21 @@ export function updateLlmSettings(settings: LlmSettingsUpdate) {
   });
 }
 
+/** 测试 LLM 连通性（发送简短请求验证 API Key 和地址） */
 export function testLlmConnectivity() {
   return request<LlmConnectivityResult>("/api/settings/llm/test", { method: "POST" });
 }
 
+// =====================================================================
+// 目录监控设置
+// =====================================================================
+
+/** 获取目录监控设置 */
 export function getWatchSettings() {
   return request<WatchSettings>("/api/settings/watch");
 }
 
+/** 更新目录监控设置 */
 export function updateWatchSettings(settings: WatchSettings) {
   return request<WatchSettings>("/api/settings/watch", {
     method: "PUT",
@@ -97,22 +132,35 @@ export function updateWatchSettings(settings: WatchSettings) {
   });
 }
 
+/** 手动触发目录扫描 */
 export function scanWatchDirectory() {
   return request<{ count: number; events: WatchEvent[] }>("/api/watch/scan", { method: "POST" });
 }
 
+/** 获取监控事件列表 */
 export function listWatchEvents() {
   return request<WatchEvent[]>("/api/watch/events");
 }
 
+// =====================================================================
+// 摘要
+// =====================================================================
+
+/** 获取可用摘要模板列表 */
 export function listSummaryTemplates() {
   return request<SummaryTemplate[]>("/api/summary/templates");
 }
 
+// =====================================================================
+// 存储设置
+// =====================================================================
+
+/** 获取存储目录设置 */
 export function getStorageSettings() {
   return request<StorageSettings>("/api/settings/storage");
 }
 
+/** 更新存储目录设置 */
 export function updateStorageSettings(settings: Pick<StorageSettings, "transcript_dir" | "summary_dir">) {
   return request<StorageSettings>("/api/settings/storage", {
     method: "PUT",
@@ -121,6 +169,15 @@ export function updateStorageSettings(settings: Pick<StorageSettings, "transcrip
   });
 }
 
+// =====================================================================
+// 录音管理
+// =====================================================================
+
+/**
+ * 获取录音列表，支持搜索和标签筛选
+ * @param query 搜索关键词（匹配文件名、标签、转写、摘要内容）
+ * @param tag 按标签筛选
+ */
 export function listRecordings(query = "", tag = "") {
   const params = new URLSearchParams();
   if (query.trim()) params.set("query", query.trim());
@@ -129,10 +186,12 @@ export function listRecordings(query = "", tag = "") {
   return request<SearchResult>(`/api/recordings${suffix}`);
 }
 
+/** 获取录音详情（含转写、摘要、任务） */
 export function getRecording(id: string) {
   return request<RecordingDetail>(`/api/recordings/${id}`);
 }
 
+/** 上传音频文件（最大 500MB） */
 export function uploadRecording(file: File) {
   const formData = new FormData();
   formData.append("file", file);
@@ -142,42 +201,12 @@ export function uploadRecording(file: File) {
   });
 }
 
-export function startTranscription(id: string) {
-  return request<Task>(`/api/transcribe/${id}`, { method: "POST" });
-}
-
-export function startTranscriptionBatch(recordingIds: string[]) {
-  return request<Task[]>("/api/transcribe/batch", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ recording_ids: recordingIds })
-  });
-}
-
-export function startSummary(id: string, mode = "summary") {
-  return request<Task>(`/api/summary/${id}?mode=${encodeURIComponent(mode)}`, { method: "POST" });
-}
-
-export function startSummaryBatch(recordingIds: string[], mode = "summary") {
-  return request<Task[]>(`/api/summary/batch?mode=${encodeURIComponent(mode)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ recording_ids: recordingIds })
-  });
-}
-
-export function getTask(id: string) {
-  return request<Task>(`/api/tasks/${id}`);
-}
-
-export function cancelTask(id: string) {
-  return request<Task>(`/api/tasks/${id}/cancel`, { method: "POST" });
-}
-
+/** 删除录音（级联删除关联的转写、摘要、任务） */
 export function deleteRecording(id: string) {
   return request<{ message: string }>(`/api/recordings/${id}`, { method: "DELETE" });
 }
 
+/** 批量删除录音 */
 export function deleteRecordingsBatch(recordingIds: string[]) {
   return request<{ deleted: string[]; missing: string[] }>("/api/recordings/batch-delete", {
     method: "POST",
@@ -186,6 +215,7 @@ export function deleteRecordingsBatch(recordingIds: string[]) {
   });
 }
 
+/** 更新录音标签 */
 export function updateRecordingTags(id: string, tags: string[]) {
   return request<Recording>(`/api/recordings/${id}/tags`, {
     method: "PATCH",
@@ -194,6 +224,7 @@ export function updateRecordingTags(id: string, tags: string[]) {
   });
 }
 
+/** 编辑转写片段的文本内容 */
 export function updateTranscriptSegment(recordingId: string, segmentId: string, text: string) {
   return request<RecordingDetail["segments"][number]>(`/api/recordings/${recordingId}/segments/${segmentId}`, {
     method: "PATCH",
@@ -202,14 +233,70 @@ export function updateTranscriptSegment(recordingId: string, segmentId: string, 
   });
 }
 
+// =====================================================================
+// 任务管理
+// =====================================================================
+
+/** 发起单个录音转写 */
+export function startTranscription(id: string) {
+  return request<Task>(`/api/transcribe/${id}`, { method: "POST" });
+}
+
+/** 批量发起转写 */
+export function startTranscriptionBatch(recordingIds: string[]) {
+  return request<Task[]>("/api/transcribe/batch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ recording_ids: recordingIds })
+  });
+}
+
+/**
+ * 发起摘要生成
+ * @param id 录音 ID
+ * @param mode 摘要模板（默认 "summary"）
+ */
+export function startSummary(id: string, mode = "summary") {
+  return request<Task>(`/api/summary/${id}?mode=${encodeURIComponent(mode)}`, { method: "POST" });
+}
+
+/** 批量发起摘要 */
+export function startSummaryBatch(recordingIds: string[], mode = "summary") {
+  return request<Task[]>(`/api/summary/batch?mode=${encodeURIComponent(mode)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ recording_ids: recordingIds })
+  });
+}
+
+/** 获取任务状态 */
+export function getTask(id: string) {
+  return request<Task>(`/api/tasks/${id}`);
+}
+
+/** 取消任务 */
+export function cancelTask(id: string) {
+  return request<Task>(`/api/tasks/${id}/cancel`, { method: "POST" });
+}
+
+// =====================================================================
+// 摘要管理
+// =====================================================================
+
+/** 删除单个摘要 */
 export function deleteSummary(id: string) {
   return request<{ message: string }>(`/api/summaries/${id}`, { method: "DELETE" });
 }
+
+// =====================================================================
+// 文件夹选择（PC 端原生对话框）
+// =====================================================================
 
 export interface PickFolderResult {
   path: string;
 }
 
+/** 弹出 Windows 原生文件夹选择对话框 */
 export function pickFolder(): Promise<PickFolderResult> {
   return request<PickFolderResult>("/api/pick-folder", { method: "POST" });
 }

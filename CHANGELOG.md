@@ -1,5 +1,62 @@
 # AI Recorder 更改日志
 
+## 2026-05-28 项目全面梳理与规范化 (v3.0.1)
+
+本次改动对项目进行全面梳理与规范化处理，重点补齐代码注释、更新结构文档和重写 README。
+
+### Added
+- 新增 `docs/project-analysis.md` 项目现状分析报告
+  - 完整架构概览、功能模块划分、技术栈详细
+  - 代码规模统计：~15,600 行 / 129 个源文件
+  - 代码质量评估（后端 1.7/10，前端 0.26% 注释覆盖率）
+  - 存在问题和改进方向
+
+### Changed
+- **后端模型层注释完善** (7 文件)：
+  - `models/recording.py` - 模块 docstring + Recording 类 + 全部字段 description
+  - `models/task.py` - 模块 docstring + Task 类 + 任务状态机说明
+  - `models/transcript.py` - 模块 docstring + TranscriptSegment 类 + 校对功能说明
+  - `models/summary.py` - 模块 docstring + Summary 类 + 6 种摘要模板说明
+  - `models/watch_event.py` - 模块 docstring + WatchEvent 类 + 事件状态说明
+  - `models/access_log.py` - 模块 docstring + AccessLog 类 + 审计说明
+  - `models/api_token.py` - 模块 docstring + ApiToken 类 + 设备级 Token 说明
+
+- **后端核心文件注释完善**：
+  - `config.py` - 模块/类/属性全面 docstring，配置项按功能区注释
+  - `main.py` - 模块/函数 docstring，中间件注册顺序说明，生命周期事件注释
+  - `pipeline/workflow.py` - 全部函数 docstring，转写/摘要流程的阶段级注释
+
+- **前端核心类型和 API 注释**：
+  - `lib/types.ts` - 全部 20+ 接口的 JSDoc 注释，按功能域分组
+  - `lib/api.ts` - 全部 25+ 导出函数的 JSDoc 注释，含 @param/@returns
+
+- **多端结构规范化**：
+  - `PROJECT_STRUCTURE.md` 全面重写：API 接口速查表、端级特性对比、数据库表详情、启动脚本清单
+  - Android 端结构已在之前更新中完善
+
+- **README.md 全面重写**：
+  - 新增项目简介和设计理念
+  - PC 端和 Android 端功能矩阵
+  - 技术栈分三端详细展示（含版本号）
+  - 完整使用流程、配置参考、数据隐私说明
+  - 项目结构简洁展示 + 详细文档索引
+
+### Documentation Coverage
+
+- ✅ README.md - 项目入口文档 (重写)
+- ✅ PROJECT_STRUCTURE.md - 项目结构说明 (重写)
+- ✅ CHANGELOG.md - 变更日志 (本次更新)
+- ✅ CODE_WIKI.md - 代码维基 (之前已同步)
+- ✅ docs/project-analysis.md - 项目现状分析 (新增)
+- ✅ backend/app/models/*.py - 7 个模型文件 (注释)
+- ✅ backend/app/config.py - 配置管理 (注释)
+- ✅ backend/app/main.py - 应用入口 (注释)
+- ✅ backend/app/pipeline/workflow.py - 核心工作流 (注释)
+- ✅ frontend/src/lib/types.ts - 类型定义 (JSDoc)
+- ✅ frontend/src/lib/api.ts - API 客户端 (JSDoc)
+
+---
+
 ## 2026-05-28 项目文档规范化整理
 
 本次改动对项目文档进行全面梳理和规范化整理，使 README 和 PROJECT_STRUCTURE 与项目最新状态保持一致。
