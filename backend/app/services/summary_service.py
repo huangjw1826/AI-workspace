@@ -1,3 +1,11 @@
+"""
+Summary service - LLM 智能摘要生成服务
+
+通过 OpenAI 兼容接口调用大模型，对转写文本生成结构化摘要。
+支持 6 种摘要模板，3 个 LLM 提供商（DeepSeek/通义千问/小米 MiMo）。
+长文本自动分段处理，网络异常自动重试。
+"""
+
 from time import sleep
 
 from openai import OpenAI
@@ -5,13 +13,15 @@ from openai import OpenAI
 from app.config import get_settings
 
 
+# 多人对话处理的指导原则，注入到每个摘要模板的 system prompt 中
 MULTI_SPEAKER_GUIDANCE = (
-    "以下转写可能来自多人对话、会议或访谈。请把内容视为对话记录，不要默认所有观点都属于“我”或同一个人；"
-    "如果无法确认说话人身份，请使用“发言者”“与会者”“一方”等中性称谓。不要编造姓名、职务、责任人或时间。"
-    "输出必须忠实于转写内容，缺失信息请明确写“未提及”。"
+    "以下转写可能来自多人对话、会议或访谈。请把内容视为对话记录，不要默认所有观点都属于"我"或同一个人；"
+    "如果无法确认说话人身份，请使用"发言者""与会者""一方"等中性称谓。不要编造姓名、职务、责任人或时间。"
+    "输出必须忠实于转写内容，缺失信息请明确写"未提及"。"
 )
 
 
+# 摘要模板定义：id/名称/描述/system prompt
 SUMMARY_TEMPLATES = {
     "structured_summary": {
         "id": "structured_summary",
@@ -30,7 +40,7 @@ SUMMARY_TEMPLATES = {
         "prompt": (
             f"{MULTI_SPEAKER_GUIDANCE}\n\n"
             "请把以下录音转写整理为会议纪要，包含：会议主题、参会角色、议题、讨论要点、结论、风险、"
-            "责任人、待确认事项。仅在转写中明确出现责任人时才写具体责任人，否则写“未提及”。"
+            "责任人、待确认事项。仅在转写中明确出现责任人时才写具体责任人，否则写"未提及"。"
             "使用 Markdown。"
         ),
     },
@@ -41,7 +51,7 @@ SUMMARY_TEMPLATES = {
         "prompt": (
             f"{MULTI_SPEAKER_GUIDANCE}\n\n"
             "请从以下录音转写中提取待办事项。按 Markdown 表格输出：负责人、事项、截止时间、优先级、依赖、备注。"
-            "负责人、截止时间或优先级未明确出现时写“未提及”，不要根据语气猜测。"
+            "负责人、截止时间或优先级未明确出现时写"未提及"，不要根据语气猜测。"
         ),
     },
     "decisions_risks": {
@@ -51,7 +61,7 @@ SUMMARY_TEMPLATES = {
         "prompt": (
             f"{MULTI_SPEAKER_GUIDANCE}\n\n"
             "请从以下录音转写中整理已确定决策、决策依据、潜在风险、阻塞点、未决问题和建议动作。"
-            "区分“已决定”和“讨论中/待确认”，不要把建议误写成既定决策。使用 Markdown。"
+            "区分"已决定"和"讨论中/待确认"，不要把建议误写成既定决策。使用 Markdown。"
         ),
     },
     "executive_brief": {
@@ -78,11 +88,21 @@ SUMMARY_TEMPLATES = {
 }
 
 
-POLISHED_TRANSCRIPT_CHUNK_CHARS = 2200
-POLISHED_TRANSCRIPT_RETRY_CHARS = 900
+# 转写规整的分段配置
+POLISHED_TRANSCRIPT_CHUNK_CHARS = 2200   # 每段最大字符数
+POLISHED_TRANSCRIPT_RETRY_CHARS = 900     # 超出 token 限制时拆分的子段最大字符数
 
 
 class SummaryService:
+    """LLM 摘要生成服务。
+
+    使用 OpenAI 兼容接口调用大模型，支持以下特性：
+    - 6 种摘要模板（会议纪要、行动事项、决策风险等）
+    - 长文本自动分段：超过 token 限制的转写自动拆分处理
+    - 指数退避重试：网络/API 异常自动重试，最多 3 次
+    - 多提供商适配：自动处理 MiMo 的 thinking 模式和 API Key 映射
+    """
+
     def __init__(self) -> None:
         self.settings = get_settings()
         self.client = OpenAI(
@@ -92,9 +112,15 @@ class SummaryService:
         ) if self.settings.resolved_llm_api_key else None
 
     def configured(self) -> bool:
+        """检查 LLM 是否已配置（API Key 已填写）。"""
         return bool(self.settings.resolved_llm_api_key)
 
     def _request(self, system_prompt: str, user_content: str) -> dict[str, object]:
+        """构建 OpenAI API 请求参数。
+
+        自动注入模型名、temperature、top_p、max_completion_tokens。
+        MiMo 提供商会额外注入 extra_body 的 thinking 配置。
+        """
         request: dict[str, object] = {
             "model": self.settings.resolved_llm_model,
             "messages": [
@@ -114,6 +140,7 @@ class SummaryService:
         return request
 
     def _complete(self, system_prompt: str, user_content: str) -> tuple[str, str | None]:
+        """调用 LLM 完成请求，返回 (内容, finish_reason)。"""
         if self.client is None:
             raise RuntimeError("LLM client is not configured.")
         response = self._complete_with_retry(system_prompt, user_content)
@@ -121,6 +148,11 @@ class SummaryService:
         return choice.message.content or "", choice.finish_reason
 
     def _complete_with_retry(self, system_prompt: str, user_content: str):
+        """带指数退避重试的 LLM 请求。
+
+        重试策略：最多 llm_retry_attempts 次（默认 3），
+        退避间隔 2^(attempt-1) 秒，上限 8 秒。
+        """
         attempts = max(1, self.settings.llm_retry_attempts)
         last_error: Exception | None = None
         for attempt in range(1, attempts + 1):
@@ -134,6 +166,10 @@ class SummaryService:
         raise RuntimeError(f"LLM request failed after {attempts} attempt(s): {last_error}") from last_error
 
     def _split_transcript(self, transcript: str, max_chars: int) -> list[str]:
+        """按行将转写文本拆分为不超过 max_chars 字符的段落。
+
+        保持行完整性，不会在行中间切断。
+        """
         chunks: list[str] = []
         current: list[str] = []
         current_size = 0
@@ -154,6 +190,11 @@ class SummaryService:
         return chunks or [transcript]
 
     def _split_long_text(self, text: str) -> list[str]:
+        """将单段长文本按中点附近的换行符/句号分割为两段。
+
+        用于处理 finish_reason=length 时的递归分割。
+        优先以换行符分割，其次以句号分割。
+        """
         midpoint = len(text) // 2
         nearby_breaks = [
             text.rfind("\n", 0, midpoint),
@@ -168,6 +209,12 @@ class SummaryService:
         return [text[:split_at], text[split_at:]]
 
     def _polish_chunk(self, chunk: str, index: int, total: int) -> str:
+        """对单个转写段落进行规整处理。
+
+        处理 finish_reason=length 的情况：
+        - 如果当前段落大于 RETRY_CHARS，递归二分分割
+        - 否则抛出异常提示增加 max_completion_tokens
+        """
         system_prompt = (
             f"{SUMMARY_TEMPLATES['polished_transcript']['prompt']}\n\n"
             "重要：这是长录音的一部分。请只规整本段，不要总结、不要压缩、不要省略信息、不要补写其他段落。"
@@ -191,6 +238,11 @@ class SummaryService:
         return content.strip()
 
     def _generate_polished_transcript(self, transcript: str) -> str:
+        """生成转写规整结果。
+
+        按 POLISHED_TRANSCRIPT_CHUNK_CHARS 分段，每段独立规整后合并。
+        单段直接规整，多段添加分段标题。
+        """
         chunks = self._split_transcript(transcript, POLISHED_TRANSCRIPT_CHUNK_CHARS)
         if len(chunks) == 1:
             return self._polish_chunk(chunks[0], 1, 1)
@@ -202,6 +254,24 @@ class SummaryService:
         return "\n".join(sections).strip()
 
     def generate(self, transcript: str, mode: str = "summary") -> str:
+        """生成指定模板的摘要。
+
+        流程：
+        1. 检查 LLM 配置 → 获取模板 prompt
+        2. polished_transcript 模式走分段规整流程
+        3. 其他模式直接调用 LLM complete
+        4. 检查 finish_reason=length 并报错
+
+        Args:
+            transcript: 拼接后的转写文本
+            mode: 摘要模板 ID（默认 "summary" 即 structured_summary）
+
+        Returns:
+            Markdown 格式的摘要内容
+
+        Raises:
+            RuntimeError: LLM 未配置 / token 限制 / API 错误
+        """
         if not self.configured():
             if self.settings.normalized_llm_provider == "mimo":
                 raise RuntimeError("MIMO_API_KEY or LLM_API_KEY is not configured.")

@@ -1,5 +1,32 @@
 # AI Recorder 更改日志
 
+## 2026-05-28 代码注释加强 — 服务层和基础设施层 (v3.0.2)
+
+本次改动补齐后端服务层（10 个文件）和基础设施层的 docstring 注释。
+
+### Changed
+
+- **服务层注释完善** (10 文件)：
+  - `services/asr_service.py` — 模块/类/方法 docstring，含时间戳对齐算法说明
+  - `services/summary_service.py` — 6 种模板定义 + LLM 调用/转写规整流程文档
+  - `services/sse_service.py` — 事件系统架构、SSEClient/SSEService 生命周期、心跳机制
+  - `services/task_service.py` — 任务创建/恢复/取消的三级状态管理流程
+  - `services/watch_service.py` — 文件稳定性检测（2 次确认）、SHA-256 去重、监控循环
+  - `services/audio_service.py` — FFmpeg 归一化命令说明、duration 双策略回退
+  - `services/docx_export.py` — OpenXML 纯 Python 生成流程、ZIP 包结构
+  - `services/export_names.py` — 文件名规范化规则、时间戳格式
+  - `services/file_service.py` — 哈希去重分块策略（1MB）
+  - `services/runtime_log.py` — RotatingFileHandler 配置、容错 NullHandler
+
+- **基础设施层注释**：
+  - `exceptions/base.py` — 6 种异常类的业务语义和 HTTP 映射
+
+### Backend Comment Coverage
+- 注释前：~1.7/10（模型层 0/10, 服务层 0/10, 基础设施 0/10）
+- 注释后：~6.5/10（模型层 5/10, 服务层 7/10, 基础设施 5/10, config/main/pipeline 8/10）
+
+---
+
 ## 2026-05-28 项目全面梳理与规范化 (v3.0.1)
 
 本次改动对项目进行全面梳理与规范化处理，重点补齐代码注释、更新结构文档和重写 README。

@@ -1,7 +1,25 @@
+"""
+Application exception hierarchy - 统一异常体系
+
+所有业务异常继承自 AppBaseException，通过标准化的错误码和状态码
+在统一异常处理中间件中转换为一致的 JSON 响应格式。
+"""
+
 from typing import Any, Optional
 
 
 class AppBaseException(Exception):
+    """应用异常基类。
+
+    携带标准化的错误信息：HTTP 状态码、业务错误码、人类可读消息、调试详情。
+
+    Attributes:
+        message: 人类可读的错误描述
+        code: 业务错误码（如 RECORDING_NOT_FOUND）
+        status_code: HTTP 状态码
+        details: 结构化错误详情（用于调试和前端展示）
+    """
+
     def __init__(
         self,
         message: str,
@@ -16,6 +34,7 @@ class AppBaseException(Exception):
         self.details = details or {}
 
     def to_dict(self) -> dict[str, Any]:
+        """转换为 API 错误响应的 JSON 格式。"""
         return {
             "error": self.message,
             "code": self.code,
@@ -24,6 +43,7 @@ class AppBaseException(Exception):
 
 
 class RecordingNotFoundError(AppBaseException):
+    """录音记录不存在（404）。"""
     def __init__(self, recording_id: str) -> None:
         super().__init__(
             message=f"Recording not found: {recording_id}",
@@ -34,6 +54,7 @@ class RecordingNotFoundError(AppBaseException):
 
 
 class TaskFailedError(AppBaseException):
+    """任务执行失败（422）。"""
     def __init__(self, task_id: str, reason: str) -> None:
         super().__init__(
             message=f"Task failed: {reason}",
@@ -44,6 +65,7 @@ class TaskFailedError(AppBaseException):
 
 
 class AudioProcessingError(AppBaseException):
+    """音频处理失败（400）— FFmpeg 或 soundfile 错误。"""
     def __init__(self, reason: str) -> None:
         super().__init__(
             message=f"Audio processing failed: {reason}",
@@ -54,6 +76,7 @@ class AudioProcessingError(AppBaseException):
 
 
 class LLMServiceError(AppBaseException):
+    """大模型服务错误（502）— API 调用失败或超时。"""
     def __init__(self, provider: str, reason: str) -> None:
         super().__init__(
             message=f"LLM service error ({provider}): {reason}",
@@ -64,6 +87,7 @@ class LLMServiceError(AppBaseException):
 
 
 class StoragePathError(AppBaseException):
+    """存储路径访问错误（403）— 路径遍历攻击或目录不可达。"""
     def __init__(self, path: str, reason: str) -> None:
         super().__init__(
             message=f"Storage path error: {reason}",
@@ -74,6 +98,7 @@ class StoragePathError(AppBaseException):
 
 
 class ValidationError(AppBaseException):
+    """业务参数校验错误（422）。"""
     def __init__(self, field: str, reason: str) -> None:
         super().__init__(
             message=f"Validation error: {reason}",
