@@ -1,5 +1,6 @@
 import importlib.util
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -61,6 +62,34 @@ def _get_disk_info(path: Path) -> dict[str, int]:
 def _get_uptime_seconds() -> float:
     """获取运行时长（秒）"""
     return time.time() - _start_time
+
+
+def _is_cloudflared_running() -> bool:
+    """检查 cloudflared 进程是否在运行"""
+    try:
+        result = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq cloudflared.exe"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return "cloudflared.exe" in result.stdout
+    except Exception:
+        return False
+
+
+def _check_tunnel_connectivity(hostname: str) -> bool:
+    """尝试通过隧道访问健康检查端点"""
+    if not hostname:
+        return False
+    try:
+        import httpx
+        url = f"https://{hostname}/health"
+        with httpx.Client(timeout=5, verify=False) as client:
+            response = client.get(url)
+            return response.status_code == 200
+    except Exception:
+        return False
 
 
 def _is_auth_required() -> bool:
@@ -130,6 +159,7 @@ def health() -> dict[str, object]:
     if settings.remote_access_enabled:
         # 如果明确配置了，则检查真实状态
         tunnel_connected = bool(remote_access_status.running)
+        
         if not tunnel_connected:
             # 检查 PID 文件
             pid_files = [
@@ -140,6 +170,14 @@ def health() -> dict[str, object]:
                 if pid_file.exists():
                     tunnel_connected = True
                     break
+        
+        if not tunnel_connected:
+            # 检查 cloudflared 进程是否在运行
+            tunnel_connected = _is_cloudflared_running()
+        
+        if not tunnel_connected:
+            # 最后尝试通过隧道访问健康检查端点
+            tunnel_connected = _check_tunnel_connectivity(settings.remote_access_hostname)
 
     return {
         "status": "ok",
