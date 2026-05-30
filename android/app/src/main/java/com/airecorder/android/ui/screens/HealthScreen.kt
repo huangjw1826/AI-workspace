@@ -26,6 +26,7 @@ import com.airecorder.android.ui.components.ErrorState
 import com.airecorder.android.ui.components.LoadingState
 import com.airecorder.android.ui.navigation.NavDestinations
 import com.airecorder.android.ui.theme.*
+import com.airecorder.android.util.ErrorUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -139,7 +140,7 @@ fun HealthScreen(
                 }
                 is HealthUiState.Error -> {
                     ErrorState(
-                        error = state.message,
+                        error = ErrorUtils.getFriendlyErrorMessage(state.message),
                         onRetry = { viewModel.loadHealth() }
                     )
                 }

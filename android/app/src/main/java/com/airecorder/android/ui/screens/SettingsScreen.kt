@@ -29,6 +29,7 @@ import com.airecorder.android.data.model.HealthResponse
 import com.airecorder.android.ui.navigation.NavDestinations
 import com.airecorder.android.ui.theme.*
 import com.airecorder.android.ui.util.rememberHapticFeedback
+import com.airecorder.android.util.ErrorUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +41,12 @@ sealed interface SettingsUiState<out T> {
     data object Loading : SettingsUiState<Nothing>
     data class Success<T : Any>(val data: T) : SettingsUiState<T>
     data class Error(val message: String) : SettingsUiState<Nothing>
+}
+
+sealed interface ConnectionTestState {
+    data object Idle : ConnectionTestState
+    data object Success : ConnectionTestState
+    data class Error(val message: String) : ConnectionTestState
 }
 
 @HiltViewModel
@@ -57,8 +64,8 @@ class SettingsViewModel @Inject constructor(
     private val _isTestingConnection = MutableStateFlow(false)
     val isTestingConnection: StateFlow<Boolean> = _isTestingConnection.asStateFlow()
     
-    private val _connectionTestResult = MutableStateFlow<Boolean?>(null)
-    val connectionTestResult: StateFlow<Boolean?> = _connectionTestResult.asStateFlow()
+    private val _connectionTestResult = MutableStateFlow<ConnectionTestState>(ConnectionTestState.Idle)
+    val connectionTestResult: StateFlow<ConnectionTestState> = _connectionTestResult.asStateFlow()
     
     private val _healthState = MutableStateFlow<HealthUiState>(HealthUiState.Loading)
     val healthState: StateFlow<HealthUiState> = _healthState.asStateFlow()
@@ -153,10 +160,12 @@ class SettingsViewModel @Inject constructor(
 
     fun updateServerUrl(url: String) {
         _serverUrl.value = url
+        _connectionTestResult.value = ConnectionTestState.Idle
     }
 
     fun updateApiToken(token: String) {
         _apiToken.value = token
+        _connectionTestResult.value = ConnectionTestState.Idle
     }
 
     suspend fun saveSettings() {
@@ -175,14 +184,16 @@ class SettingsViewModel @Inject constructor(
     fun testConnection() {
         viewModelScope.launch {
             _isTestingConnection.value = true
-            _connectionTestResult.value = null
+            _connectionTestResult.value = ConnectionTestState.Idle
 
-            try {
-                settingsRepository.testConnection(_serverUrl.value, _apiToken.value)
-                _connectionTestResult.value = true
-            } catch (_: Exception) {
-                _connectionTestResult.value = false
-            }
+            settingsRepository.testConnection(_serverUrl.value, _apiToken.value).fold(
+                onSuccess = {
+                    _connectionTestResult.value = ConnectionTestState.Success
+                },
+                onFailure = { exception ->
+                    _connectionTestResult.value = ConnectionTestState.Error(exception.message ?: "Unknown error")
+                }
+            )
 
             _isTestingConnection.value = false
         }
@@ -273,7 +284,7 @@ fun SettingsScreen(
                         HealthDashboard(data)
                     }
                     is HealthUiState.Error -> {
-                        ErrorCard(message = state.message)
+                        ErrorCard(message = ErrorUtils.getFriendlyErrorMessage(state.message))
                     }
                 }
             }
@@ -326,8 +337,11 @@ fun SettingsScreen(
                     )
                 }
 
-                AnimatedVisibility(visible = connectionTestResult != null) {
-                    ConnectionResultCard(isSuccess = connectionTestResult == true)
+                AnimatedVisibility(visible = connectionTestResult !is ConnectionTestState.Idle) {
+                    ConnectionResultCard(
+                        isSuccess = connectionTestResult is ConnectionTestState.Success,
+                        errorMessage = (connectionTestResult as? ConnectionTestState.Error)?.message
+                    )
                 }
             }
 
@@ -786,7 +800,13 @@ private fun ActionButton(
 }
 
 @Composable
-private fun ConnectionResultCard(isSuccess: Boolean) {
+private fun ConnectionResultCard(isSuccess: Boolean, errorMessage: String? = null) {
+    val message = when {
+        isSuccess -> stringResource(R.string.settings_connection_success)
+        errorMessage != null -> ErrorUtils.getFriendlyErrorMessage(errorMessage)
+        else -> stringResource(R.string.settings_connection_failed)
+    }
+    
     Surface(
         color = (if (isSuccess) StatusSuccess else StatusError).copy(alpha = 0.1f),
         shape = RoundedCornerShape(12.dp),
@@ -805,7 +825,7 @@ private fun ConnectionResultCard(isSuccess: Boolean) {
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = if (isSuccess) stringResource(R.string.settings_connection_success) else stringResource(R.string.settings_connection_failed),
+                text = message,
                 style = MaterialTheme.typography.bodySmall,
                 color = if (isSuccess) StatusSuccess else StatusError,
                 fontWeight = FontWeight.Medium

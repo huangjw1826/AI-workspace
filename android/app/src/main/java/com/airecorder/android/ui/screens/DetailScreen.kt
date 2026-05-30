@@ -34,6 +34,7 @@ import com.airecorder.android.ui.theme.TextSecondary
 import com.airecorder.android.ui.theme.TextTertiary
 import com.airecorder.android.ui.util.rememberHapticFeedback
 import com.airecorder.android.util.AudioUtils
+import com.airecorder.android.util.ErrorUtils
 import com.airecorder.android.util.FormatUtils
 import kotlinx.coroutines.launch
 
@@ -282,7 +283,7 @@ fun DetailScreen(
                     }
                     is DetailUiState.Error -> {
                         ErrorState(
-                            error = state.message,
+                            error = ErrorUtils.getFriendlyErrorMessage(state.message),
                             onRetry = { viewModel.loadRecording(recordingId) }
                         )
                     }

@@ -136,7 +136,7 @@
 |------|---------|------|
 | 全部录音 | `recordings.size` | 总数量 + 总大小（`formatSize(totalSize)`） |
 | 待处理 | `status == "uploaded" or "queued"` | 数量 + 进度百分比 |
-| AI 完成率 | `(completed / total) * 100` | 百分比 + 已摘要数量 |
+| 摘要完成率 | `(completed / total) * 100` | 百分比 + 已摘要数量 |
 | 累计时长 | `sum(duration_seconds)` | 格式化时长 + 错误数量 |
 
 ### 3.3 筛选交互

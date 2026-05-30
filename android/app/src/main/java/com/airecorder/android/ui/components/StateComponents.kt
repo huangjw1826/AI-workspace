@@ -132,40 +132,42 @@ private fun IllustrationCard(
 @Composable
 fun ErrorState(
     modifier: Modifier = Modifier,
+    title: String = "加载失败",
     error: String,
     onRetry: () -> Unit
 ) {
     Column(
-        modifier = modifier.fillMaxSize().padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(80.dp)
-                .clip(CircleShape)
-                .background(StatusErrorLight),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.WarningAmber,
-                contentDescription = null,
-                tint = StatusError,
-                modifier = Modifier.size(32.dp)
-            )
-        }
+        Icon(
+            imageVector = Icons.Default.ErrorOutline,
+            contentDescription = null,
+            modifier = Modifier.size(80.dp),
+            tint = StatusError
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = TextSecondary
+        )
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = error,
             style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary,
-            modifier = Modifier.padding(top = 24.dp),
+            color = TextTertiary,
             textAlign = TextAlign.Center
         )
+        Spacer(modifier = Modifier.height(16.dp))
         Button(
             onClick = onRetry,
-            modifier = Modifier.padding(top = 32.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Primary),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Primary)
         ) {
             Text("重试")
         }

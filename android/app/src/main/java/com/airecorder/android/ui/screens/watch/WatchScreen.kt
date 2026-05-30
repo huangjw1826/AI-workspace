@@ -24,7 +24,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.airecorder.android.R
 import com.airecorder.android.data.model.WatchEvent
+import com.airecorder.android.ui.components.ErrorState
 import com.airecorder.android.ui.theme.*
+import com.airecorder.android.util.ErrorUtils
 import com.airecorder.android.util.FormatUtils
 import com.airecorder.android.ui.util.rememberHapticFeedback
 
@@ -89,39 +91,13 @@ fun WatchScreen(
                     }
                 }
                 is WatchUiState.Error -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ErrorOutline,
-                                contentDescription = null,
-                                tint = StatusError,
-                                modifier = Modifier.size(64.dp)
-                            )
-                            Text(
-                                text = state.message,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = TextSecondary
-                            )
-                            Button(
-                                onClick = {
-                                    hapticFeedback.performClick()
-                                    viewModel.refresh()
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Primary,
-                                    contentColor = OnPrimary
-                                )
-                            ) {
-                                Text("重试")
-                            }
+                    ErrorState(
+                        error = ErrorUtils.getFriendlyErrorMessage(state.message),
+                        onRetry = {
+                            hapticFeedback.performClick()
+                            viewModel.refresh()
                         }
-                    }
+                    )
                 }
                 is WatchUiState.Success -> {
                     if (state.events.isEmpty()) {

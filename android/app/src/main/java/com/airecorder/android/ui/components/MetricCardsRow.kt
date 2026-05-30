@@ -90,7 +90,7 @@ fun MetricCardsRow(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 MetricCard(
-                    title = "AI 完成率",
+                    title = "摘要完成率",
                     value = "${(metrics.aiCompletionRate * 100).toInt()}%",
                     color = StatusSuccess,
                     modifier = Modifier.weight(1f)

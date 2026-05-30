@@ -144,7 +144,7 @@ export function LibraryPage({
             icon={<Clock3 size={17} />}
           />
           <MetricCard
-            label="AI 完成率"
+            label="摘要完成率"
             value={`${completionRate}%`}
             hint={`已摘要 ${stats.completed} 条`}
             icon={<Sparkles size={17} />}

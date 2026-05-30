@@ -33,6 +33,7 @@ import com.airecorder.android.ui.animation.SharedElementState
 import com.airecorder.android.ui.components.*
 import com.airecorder.android.ui.theme.*
 import com.airecorder.android.ui.util.rememberHapticFeedback
+import com.airecorder.android.util.ErrorUtils
 import com.airecorder.android.util.FormatUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -192,7 +193,7 @@ fun LibraryScreen(
                 }
                 is LibraryUiState.Error -> {
                     ErrorState(
-                        error = state.message,
+                        error = ErrorUtils.getFriendlyErrorMessage(state.message),
                         onRetry = { viewModel.refresh() }
                     )
                 }
@@ -427,40 +428,4 @@ private fun EmptyFilteredView() {
     }
 }
 
-@Composable
-private fun ErrorState(
-    error: String,
-    onRetry: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.ErrorOutline,
-            contentDescription = null,
-            modifier = Modifier.size(80.dp),
-            tint = Error
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "加载失败",
-            style = MaterialTheme.typography.titleLarge,
-            color = TextSecondary
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = error,
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextTertiary,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = onRetry) {
-            Text("重试")
-        }
-    }
-}
+
