@@ -1,5 +1,6 @@
 package com.airecorder.android.data.model
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import com.airecorder.android.ui.theme.StatusSuccess
 import com.airecorder.android.ui.theme.StatusWarning
@@ -10,6 +11,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 
+@Immutable
 @Serializable
 data class Recording(
     val id: String,
@@ -63,6 +65,7 @@ data class Recording(
         }
 }
 
+@Immutable
 @Serializable
 data class WatchEvent(
     val id: String,
@@ -85,6 +88,7 @@ data class WatchEvent(
     val createdAt: String
 )
 
+@Immutable
 @Serializable
 data class TranscriptSegment(
     val id: String? = null,
@@ -99,6 +103,7 @@ data class TranscriptSegment(
     val sequence: Int? = null
 )
 
+@Immutable
 @Serializable
 data class Summary(
     val id: String? = null,
@@ -110,6 +115,7 @@ data class Summary(
     val createdAt: String? = null
 )
 
+@Immutable
 @Serializable
 data class Task(
     val id: String,
@@ -125,6 +131,7 @@ data class Task(
     val updatedAt: String? = null
 )
 
+@Immutable
 @Serializable
 data class RecordingDetail(
     val recording: Recording,
@@ -133,6 +140,7 @@ data class RecordingDetail(
     val tasks: List<Task> = emptyList()
 )
 
+@Immutable
 @Serializable
 data class SearchResult(
     val recordings: List<Recording> = emptyList(),
@@ -140,6 +148,7 @@ data class SearchResult(
     val matchPreviews: Map<String, List<String>> = emptyMap()
 )
 
+@Immutable
 @Serializable
 data class HealthResponse(
     val status: String,
@@ -168,6 +177,7 @@ data class HealthResponse(
     val tunnel: TunnelInfo? = null
 )
 
+@Immutable
 @Serializable
 data class SystemInfo(
     @SerialName("cpu_percent")
@@ -178,6 +188,7 @@ data class SystemInfo(
     val uptimeSeconds: Double = 0.0
 )
 
+@Immutable
 @Serializable
 data class MemoryInfo(
     val total: Long = -1,
@@ -186,6 +197,7 @@ data class MemoryInfo(
     val percent: Double = -1.0
 )
 
+@Immutable
 @Serializable
 data class DiskInfo(
     val total: Long = -1,
@@ -193,11 +205,13 @@ data class DiskInfo(
     val free: Long = -1
 )
 
+@Immutable
 @Serializable
 data class TunnelInfo(
     val connected: Boolean = true
 )
 
+@Immutable
 @Serializable
 data class LLMSettings(
     val provider: String,
@@ -215,9 +229,10 @@ data class LLMSettings(
     @SerialName("top_p")
     val topP: Double? = null,
     @Transient
-    val providers: Map<String, Map<String, Any>>? = null
+    val providers: String? = null
 )
 
+@Immutable
 @Serializable
 data class WatchSettings(
     val enabled: Boolean,
@@ -229,6 +244,7 @@ data class WatchSettings(
     val exists: Boolean
 )
 
+@Immutable
 @Serializable
 data class StorageSettings(
     @SerialName("transcript_dir")

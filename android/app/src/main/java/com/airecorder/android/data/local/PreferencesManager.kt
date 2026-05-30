@@ -22,6 +22,7 @@ class PreferencesManager @Inject constructor(
         val API_TOKEN = stringPreferencesKey("api_token")
         val DARK_MODE = booleanPreferencesKey("dark_mode")
         val OVERVIEW_EXPANDED = booleanPreferencesKey("overview_expanded")
+        val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
     }
     
     val serverUrl: Flow<String> = context.dataStore.data
@@ -42,6 +43,11 @@ class PreferencesManager @Inject constructor(
     val overviewExpanded: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[PreferencesKeys.OVERVIEW_EXPANDED] ?: true
+        }
+    
+    val dynamicColor: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.DYNAMIC_COLOR] ?: true
         }
     
     suspend fun setServerUrl(url: String) {
@@ -65,6 +71,12 @@ class PreferencesManager @Inject constructor(
     suspend fun setOverviewExpanded(expanded: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.OVERVIEW_EXPANDED] = expanded
+        }
+    }
+    
+    suspend fun setDynamicColor(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.DYNAMIC_COLOR] = enabled
         }
     }
     

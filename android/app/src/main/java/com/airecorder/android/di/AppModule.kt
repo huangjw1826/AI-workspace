@@ -7,6 +7,7 @@ import com.airecorder.android.data.local.PreferencesManager
 import com.airecorder.android.data.remote.ApiService
 import com.airecorder.android.data.remote.AuthInterceptor
 import com.airecorder.android.data.remote.TokenProvider
+import com.airecorder.android.data.remote.DefaultTokenProvider
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import androidx.media3.exoplayer.ExoPlayer
 import dagger.Module
@@ -37,7 +38,7 @@ object AppModule {
     @Provides
     @Singleton
     fun provideOkHttpClient(
-        authInterceptor: AuthInterceptor
+        authInterceptor: AuthInterceptor,
     ): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) {
@@ -77,10 +78,7 @@ object AppModule {
     @Provides
     @Singleton
     fun provideTokenProvider(preferencesManager: PreferencesManager): TokenProvider =
-        object : TokenProvider {
-            override suspend fun getToken(): Flow<String> = preferencesManager.apiToken
-            override suspend fun getServerUrl(): Flow<String> = preferencesManager.serverUrl
-        }
+        DefaultTokenProvider(preferencesManager)
     
     @Provides
     @Singleton

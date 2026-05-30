@@ -34,7 +34,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 sealed class HealthUiState {
-    object Loading : HealthUiState()
+    data object Loading : HealthUiState()
     data class Success(val data: HealthResponse) : HealthUiState()
     data class Error(val message: String) : HealthUiState()
 }

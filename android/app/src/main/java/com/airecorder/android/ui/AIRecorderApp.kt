@@ -4,12 +4,17 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -21,6 +26,8 @@ import com.airecorder.android.data.local.PreferencesManager
 import com.airecorder.android.data.model.Summary
 import com.airecorder.android.di.PreferencesManagerEntryPoint
 import com.airecorder.android.ui.animation.PageTransitions
+import com.airecorder.android.ui.animation.SharedElementOverlay
+import com.airecorder.android.ui.animation.SharedElementState
 import com.airecorder.android.ui.components.BottomNavigationBar
 import com.airecorder.android.ui.components.ToastContainer
 import com.airecorder.android.ui.components.rememberToastManagerState
@@ -43,6 +50,9 @@ fun AIRecorderApp(
     val actions = remember(navController) { AppActions(navController) }
     val toastManager = rememberToastManagerState()
     var showUploadSheet by remember { mutableStateOf(false) }
+    
+    // 共享元素过渡状态
+    val sharedElementState = remember { SharedElementState() }
     
     // 获取当前回退栈条目，用于判断是否显示底部导航栏
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -83,8 +93,8 @@ fun AIRecorderApp(
         bottomBar = {
             AnimatedVisibility(
                 visible = showBottomBar,
-                enter = fadeIn(),
-                exit = fadeOut()
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
             ) {
                 BottomNavigationBar(
                     currentDestination = currentNavDest,
@@ -99,11 +109,10 @@ fun AIRecorderApp(
                 )
             }
         },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0) // 由内部各页面自行处理安全区域
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
-        // 使用 Box 来叠加 Toast 容器和导航内容
-        androidx.compose.foundation.layout.Box(modifier = Modifier.padding(paddingValues)) {
-            // Toast 容器 - 放在最上层
+        Box(modifier = Modifier.padding(paddingValues)) {
+            // Toast 容器
             ToastContainer(toastManagerState = toastManager)
             
             // 主要导航内容
@@ -127,7 +136,18 @@ fun AIRecorderApp(
                     LibraryScreen(
                         preferencesManager = preferencesManager,
                         onNavigateToDetail = actions.navigateToDetail,
-                        onUploadClick = { showUploadSheet = true }
+                        onUploadClick = { showUploadSheet = true },
+                        sharedElementState = sharedElementState,
+                        onRecordItemClick = { id, name, sub, coords ->
+                            val pos = coords?.positionInWindow() ?: androidx.compose.ui.geometry.Offset.Zero
+                            val bounds = Rect(
+                                pos.x, pos.y,
+                                pos.x + (coords?.size?.width ?: 0),
+                                pos.y + (coords?.size?.height ?: 0)
+                            )
+                            sharedElementState.startTransition(id, name, sub, bounds)
+                            actions.navigateToDetail(id)
+                        }
                     )
                 }
                 composable(
@@ -137,9 +157,7 @@ fun AIRecorderApp(
                     popEnterTransition = { PageTransitions.popEnterTransition },
                     popExitTransition = { PageTransitions.popExitTransition }
                 ) {
-                    WatchScreen(
-                        onNavigateBack = actions.navigateBack
-                    )
+                    WatchScreen(onNavigateBack = actions.navigateBack)
                 }
                 composable(
                     route = NavDestinations.Settings.route,
@@ -148,10 +166,7 @@ fun AIRecorderApp(
                     popEnterTransition = { PageTransitions.popEnterTransition },
                     popExitTransition = { PageTransitions.popExitTransition }
                 ) {
-                    SettingsScreen(
-                        onNavigateBack = actions.navigateBack,
-                        onNavigateToLibrary = actions.navigateToLibrary
-                    )
+                    SettingsScreen()
                 }
                 composable(
                     route = NavDestinations.Detail.ROUTE_TEMPLATE,
@@ -166,7 +181,8 @@ fun AIRecorderApp(
                         onNavigateBack = actions.navigateBack,
                         onNavigateToSummaryDetail = actions.navigateToSummaryDetail,
                         onNavigateToLibrary = actions.navigateToLibrary,
-                        onNavigateToSettings = actions.navigateToSettings
+                        onNavigateToSettings = actions.navigateToSettings,
+                        sharedElementState = sharedElementState
                     )
                 }
                 composable(
@@ -195,13 +211,20 @@ fun AIRecorderApp(
                     }
                 }
             }
+            
+            // 共享元素飞入覆盖层（最上层）
+            if (sharedElementState.isTransitioning) {
+                SharedElementOverlay(
+                    state = sharedElementState,
+                    destinationY = 0f,
+                    onComplete = { sharedElementState.endTransition() }
+                )
+            }
         }
     }
 
     if (showUploadSheet) {
-        UploadBottomSheet(
-            onDismiss = { showUploadSheet = false }
-        )
+        UploadBottomSheet(onDismiss = { showUploadSheet = false })
     }
 }
 
@@ -216,9 +239,7 @@ private class AppActions(navController: NavHostController) {
     
     val navigateToWatch: () -> Unit = {
         navController.navigate(NavDestinations.Watch.route) {
-            popUpTo(navController.graph.findStartDestination().id) {
-                saveState = true
-            }
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
             restoreState = true
         }
@@ -226,10 +247,7 @@ private class AppActions(navController: NavHostController) {
     
     val navigateToSettings: () -> Unit = {
         navController.navigate(NavDestinations.Settings.route) {
-            // 标准 Bottom Navigation 跳转逻辑
-            popUpTo(navController.graph.findStartDestination().id) {
-                saveState = true
-            }
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
             restoreState = true
         }
@@ -237,9 +255,7 @@ private class AppActions(navController: NavHostController) {
     
     val navigateToLibrary: () -> Unit = {
         navController.navigate(NavDestinations.Library.route) {
-            popUpTo(navController.graph.findStartDestination().id) {
-                saveState = true
-            }
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
             restoreState = true
         }
@@ -249,5 +265,3 @@ private class AppActions(navController: NavHostController) {
         navController.navigateUp()
     }
 }
-
-

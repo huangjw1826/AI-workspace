@@ -16,22 +16,22 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 sealed class DetailUiState {
-    object Loading : DetailUiState()
+    data object Loading : DetailUiState()
     data class Success(val data: RecordingDetail) : DetailUiState()
     data class Error(val message: String) : DetailUiState()
 }
 
 sealed class AudioDownloadState {
-    object NotDownloaded : AudioDownloadState()
+    data object NotDownloaded : AudioDownloadState()
     data class Downloading(val progress: Float, val downloaded: Long, val total: Long) : AudioDownloadState()
     data class Paused(val progress: Float, val downloaded: Long, val total: Long) : AudioDownloadState()
-    object Downloaded : AudioDownloadState()
+    data object Downloaded : AudioDownloadState()
     data class Error(val message: String) : AudioDownloadState()
 }
 
 sealed class AudioPlaybackState {
-    object Idle : AudioPlaybackState()
-    object Buffering : AudioPlaybackState()
+    data object Idle : AudioPlaybackState()
+    data object Buffering : AudioPlaybackState()
     data class Playing(val positionMs: Long, val durationMs: Long) : AudioPlaybackState()
     data class Paused(val positionMs: Long, val durationMs: Long) : AudioPlaybackState()
     data class Completed(val durationMs: Long) : AudioPlaybackState()

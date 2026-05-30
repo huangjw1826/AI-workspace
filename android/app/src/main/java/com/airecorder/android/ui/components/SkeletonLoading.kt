@@ -6,13 +6,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.airecorder.android.ui.theme.*
 
@@ -40,7 +40,7 @@ fun SkeletonCard() {
             .fillMaxWidth()
             .height(120.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Surface
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
@@ -86,10 +86,13 @@ fun SkeletonRectangle(
         label = "shimmer"
     )
     
+    // 使用主题色系，深色/浅色模式自适应
+    val shimmerBase = MaterialTheme.colorScheme.surfaceVariant
+    val shimmerHighlight = shimmerBase.copy(alpha = 0.3f)
     val shimmerColors = listOf(
-        SurfaceVariant,
-        Color(0xFFE5E7EB),
-        SurfaceVariant
+        shimmerBase,
+        shimmerHighlight,
+        shimmerBase
     )
     
     Box(

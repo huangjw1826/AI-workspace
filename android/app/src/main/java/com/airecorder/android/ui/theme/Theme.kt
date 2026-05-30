@@ -110,8 +110,7 @@ object AppIconDefaults {
 @Composable
 fun AIRecorderTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // 动态颜色仅在 Android 12+ 上可用
-    dynamicColor: Boolean = false, // 默认为 false 保持品牌一致性
+    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -128,7 +127,6 @@ fun AIRecorderTheme(
         SideEffect {
             val window = (view.context as Activity).window
             window.statusBarColor = colorScheme.background.toArgb()
-            // 设置状态栏图标的颜色
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }
@@ -140,4 +138,3 @@ fun AIRecorderTheme(
         content = content
     )
 }
-

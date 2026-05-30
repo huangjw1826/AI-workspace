@@ -16,7 +16,7 @@ import javax.inject.Singleton
 
 @Singleton
 class SettingsRepository @Inject constructor(
-    private val apiService: ApiService
+    private val apiService: ApiService,
 ) {
     
     private val json = Json {

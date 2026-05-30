@@ -26,11 +26,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.airecorder.android.R
 import com.airecorder.android.data.model.Summary
 import com.airecorder.android.data.model.TranscriptSegment
+import com.airecorder.android.ui.animation.SharedElementState
 import com.airecorder.android.ui.components.*
 import com.airecorder.android.ui.screens.detail.*
 import com.airecorder.android.ui.theme.DividerLight
 import com.airecorder.android.ui.theme.TextSecondary
 import com.airecorder.android.ui.theme.TextTertiary
+import com.airecorder.android.ui.util.rememberHapticFeedback
 import com.airecorder.android.util.AudioUtils
 import com.airecorder.android.util.FormatUtils
 import kotlinx.coroutines.launch
@@ -43,7 +45,8 @@ fun DetailScreen(
     onNavigateBack: () -> Unit,
     onNavigateToSummaryDetail: (Summary) -> Unit,
     onNavigateToLibrary: () -> Unit,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    sharedElementState: SharedElementState? = null
 ) {
     LaunchedEffect(recordingId) {
         viewModel.loadRecording(recordingId)
@@ -67,13 +70,24 @@ fun DetailScreen(
     )
     
     val scope = rememberCoroutineScope()
+    val hapticFeedback = rememberHapticFeedback()
     
-    LaunchedEffect(selectedTab) {
-        if (pagerState.currentPage != selectedTab) {
-            pagerState.animateScrollToPage(selectedTab)
+    // 当详情页加载完成时结束共享元素过渡
+    LaunchedEffect(uiState) {
+        if (uiState is DetailUiState.Success && sharedElementState?.isTransitioning == true) {
+            kotlinx.coroutines.delay(300) // 等 300ms 让页面渲染
+            sharedElementState.endTransition()
         }
     }
     
+    // Tab 点击 → Pager：使用 scrollToPage 即时跳转
+    LaunchedEffect(selectedTab) {
+        if (pagerState.currentPage != selectedTab) {
+            pagerState.scrollToPage(selectedTab)
+        }
+    }
+    
+    // Pager 滑动 → Tab：单向同步回 ViewModel
     LaunchedEffect(pagerState.currentPage) {
         if (pagerState.currentPage != selectedTab) {
             viewModel.selectTab(pagerState.currentPage)
@@ -110,7 +124,7 @@ fun DetailScreen(
                 },
                 actions = {
                     if (uiState is DetailUiState.Success) {
-                        IconButton(onClick = { viewModel.refreshRecording() }) {
+                        IconButton(onClick = { hapticFeedback.performClick(); viewModel.refreshRecording() }) {
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = "刷新",
@@ -118,7 +132,7 @@ fun DetailScreen(
                             )
                         }
                         IconButton(
-                            onClick = { viewModel.deleteRecording(recordingId, onNavigateBack) }
+                            onClick = { hapticFeedback.performConfirm(); viewModel.deleteRecording(recordingId, onNavigateBack) }
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Delete,

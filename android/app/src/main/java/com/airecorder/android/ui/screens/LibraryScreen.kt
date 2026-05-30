@@ -1,6 +1,12 @@
 package com.airecorder.android.ui.screens
 
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,19 +17,23 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import com.airecorder.android.data.local.PreferencesManager
 import kotlinx.coroutines.launch
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.airecorder.android.R
 import com.airecorder.android.data.model.Recording
+import com.airecorder.android.ui.animation.SharedElementState
 import com.airecorder.android.ui.components.*
 import com.airecorder.android.ui.theme.*
+import com.airecorder.android.ui.util.rememberHapticFeedback
+import com.airecorder.android.util.FormatUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,7 +41,9 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
     preferencesManager: PreferencesManager,
     onNavigateToDetail: (String) -> Unit,
-    onUploadClick: () -> Unit
+    onUploadClick: () -> Unit,
+    sharedElementState: SharedElementState? = null,
+    onRecordItemClick: ((String, String, String, LayoutCoordinates?) -> Unit)? = null
 ) {
     LaunchedEffect(Unit) {
         viewModel.loadRecordings()
@@ -48,6 +60,7 @@ fun LibraryScreen(
     var isSearchExpanded by remember { mutableStateOf(false) }
     
     val coroutineScope = rememberCoroutineScope()
+    val hapticFeedback = rememberHapticFeedback()
     
     var isOverviewExpanded by remember { mutableStateOf(true) }
     
@@ -60,6 +73,9 @@ fun LibraryScreen(
     val toggleOverview = {
         val newState = !isOverviewExpanded
         isOverviewExpanded = newState
+        if (newState) {
+            isSearchExpanded = false
+        }
         coroutineScope.launch {
             preferencesManager.setOverviewExpanded(newState)
         }
@@ -73,9 +89,9 @@ fun LibraryScreen(
             if (isSelectionMode) {
                 BatchOperationBar(
                     selectedCount = selectedRecordingIds.size,
-                    onTranscribe = { viewModel.batchTranscribe() },
-                    onSummarize = { viewModel.batchSummarize() },
-                    onDelete = { viewModel.batchDelete() },
+                    onTranscribe = { hapticFeedback.performHeavyClick(); viewModel.batchTranscribe() },
+                    onSummarize = { hapticFeedback.performHeavyClick(); viewModel.batchSummarize() },
+                    onDelete = { hapticFeedback.performConfirm(); viewModel.batchDelete() },
                     onDeselectAll = { viewModel.deselectAllRecordings() }
                 )
             } else {
@@ -95,7 +111,16 @@ fun LibraryScreen(
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
-                        IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
+                        IconButton(onClick = { 
+                            val newState = !isSearchExpanded
+                            isSearchExpanded = newState
+                            if (newState) {
+                                isOverviewExpanded = false
+                                coroutineScope.launch {
+                                    preferencesManager.setOverviewExpanded(false)
+                                }
+                            }
+                        }) {
                             Icon(
                                 imageVector = if (isSearchExpanded) Icons.Default.FilterListOff else Icons.Default.FilterList,
                                 contentDescription = "搜索与筛选",
@@ -118,7 +143,7 @@ fun LibraryScreen(
             }
         },
         containerColor = Background,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        contentWindowInsets = WindowInsets.safeDrawing
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -152,8 +177,15 @@ fun LibraryScreen(
                             onClearAllFilters = { viewModel.clearAllFilters() },
                             onRemoveStatus = { viewModel.toggleStatusFilter(it) },
                             onRemoveSource = { viewModel.setSourceFilter(null) },
-                            onRecordingClick = { onNavigateToDetail(it) },
-                            onRecordingLongClick = { viewModel.toggleRecordingSelection(it) },
+                            onRecordingClick = { id, coords ->
+                                onRecordItemClick?.invoke(
+                                    id,
+                                    state.recordings.find { it.id == id }?.filename ?: "",
+                                    FormatUtils.formatDuration(state.recordings.find { it.id == id }?.durationSeconds ?: 0.0),
+                                    coords
+                                )
+                            },
+                            onRecordingLongClick = { hapticFeedback.performLongPress(); viewModel.toggleRecordingSelection(it) },
                             onRefresh = { viewModel.refresh() }
                         )
                     }
@@ -188,7 +220,7 @@ private fun ContentView(
     onClearAllFilters: () -> Unit,
     onRemoveStatus: (String) -> Unit,
     onRemoveSource: () -> Unit,
-    onRecordingClick: (String) -> Unit,
+    onRecordingClick: (String, LayoutCoordinates?) -> Unit,
     onRecordingLongClick: (String) -> Unit,
     onRefresh: () -> Unit
 ) {
@@ -200,11 +232,13 @@ private fun ContentView(
             isExpanded = isOverviewExpanded
         )
         
-        if (isSearchExpanded) {
+        AnimatedVisibility(
+            visible = isSearchExpanded,
+            enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+            exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
+        ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .animateContentSize()
+                modifier = Modifier.fillMaxWidth()
             ) {
                 SearchBar(
                     query = searchQuery,
@@ -289,37 +323,23 @@ private fun SearchBar(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun RecordingList(
     recordings: List<Recording>,
     selectedRecordingIds: Set<String>,
     isSelectionMode: Boolean,
     isRefreshing: Boolean,
-    onRecordingClick: (String) -> Unit,
+    onRecordingClick: (String, LayoutCoordinates?) -> Unit,
     onRecordingLongClick: (String) -> Unit,
     onRefresh: () -> Unit
 ) {
-    val pullToRefreshState = rememberPullToRefreshState()
-    
-    if (pullToRefreshState.isRefreshing) {
-        LaunchedEffect(true) {
-            onRefresh()
-        }
-    }
-    
-    LaunchedEffect(isRefreshing) {
-        if (isRefreshing) {
-            pullToRefreshState.startRefresh()
-        } else {
-            pullToRefreshState.endRefresh()
-        }
-    }
-    
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .nestedScroll(pullToRefreshState.nestedScrollConnection)
+    val itemPositions = remember { mutableMapOf<String, LayoutCoordinates>() }
+
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize()
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -334,19 +354,14 @@ private fun RecordingList(
                     recording = recording,
                     isSelected = recording.id in selectedRecordingIds,
                     isSelectionMode = isSelectionMode,
-                    onClick = { onRecordingClick(recording.id) },
-                    onLongClick = { onRecordingLongClick(recording.id) }
+                    onClick = { onRecordingClick(recording.id, itemPositions[recording.id]) },
+                    onLongClick = { onRecordingLongClick(recording.id) },
+                    onPositioned = { coords -> itemPositions[recording.id] = coords },
+                    modifier = Modifier.animateItem(
+                        placementSpec = tween(300)
+                    )
                 )
             }
-        }
-        
-        if (pullToRefreshState.progress > 0.01f || isRefreshing) {
-            PullToRefreshContainer(
-                state = pullToRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter),
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                contentColor = MaterialTheme.colorScheme.primary
-            )
         }
     }
 }

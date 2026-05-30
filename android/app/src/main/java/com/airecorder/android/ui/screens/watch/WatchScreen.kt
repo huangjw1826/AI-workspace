@@ -1,5 +1,7 @@
 package com.airecorder.android.ui.screens.watch
 
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,10 +10,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -31,6 +36,7 @@ fun WatchScreen(
 ) {
     val hapticFeedback = rememberHapticFeedback()
     val uiState by viewModel.uiState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     
     Scaffold(
         topBar = {
@@ -63,7 +69,7 @@ fun WatchScreen(
             )
         },
         containerColor = Background,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        contentWindowInsets = WindowInsets.safeDrawing
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -141,15 +147,11 @@ fun WatchScreen(
                             }
                         }
                     } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(state.events) { event ->
-                                WatchEventItem(event = event)
-                            }
-                        }
+                        WatchEventList(
+                            events = state.events,
+                            isRefreshing = isRefreshing,
+                            onRefresh = { viewModel.refresh() }
+                        )
                     }
                 }
             }
@@ -157,10 +159,42 @@ fun WatchScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun WatchEventItem(event: WatchEvent) {
+private fun WatchEventList(
+    events: List<WatchEvent>,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit
+) {
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(events, key = { it.id }) { event ->
+                WatchEventItem(
+                    event = event,
+                    modifier = Modifier.animateItem(
+                        placementSpec = tween(300)
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun WatchEventItem(
+    event: WatchEvent,
+    modifier: Modifier = Modifier
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = Surface
         ),

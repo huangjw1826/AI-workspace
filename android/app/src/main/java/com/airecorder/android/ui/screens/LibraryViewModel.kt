@@ -15,9 +15,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
+import kotlin.math.min
 
 sealed class LibraryUiState {
-    object Loading : LibraryUiState()
+    data object Loading : LibraryUiState()
     data class Success(val recordings: List<Recording>) : LibraryUiState()
     data class Error(val message: String) : LibraryUiState()
 }
@@ -73,11 +74,13 @@ class LibraryViewModel @Inject constructor(
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
     
     private var pollingJob: Job? = null
+    private var consecutiveFailures = 0
+    private var initialLoadDone = false
     
     init {
-        loadRecordings()
         observeFilters()
-        startPolling()
+        // 先确保有初始数据再启动轮询，避免重复请求
+        loadRecordings()
     }
     
     private fun observeFilters() {
@@ -105,6 +108,7 @@ class LibraryViewModel @Inject constructor(
             }
             repository.getRecordings(_searchQuery.value).fold(
                 onSuccess = { result ->
+                    consecutiveFailures = 0 // 重置失败计数器
                     _allRecordings.value = result.recordings
                     if (_uiState.value !is LibraryUiState.Success) {
                         val filtered = applyFilters(
@@ -116,8 +120,14 @@ class LibraryViewModel @Inject constructor(
                         )
                         _uiState.value = LibraryUiState.Success(filtered)
                     }
+                    // 首次加载完成后启动轮询
+                    if (!initialLoadDone) {
+                        initialLoadDone = true
+                        startPolling()
+                    }
                 },
                 onFailure = { exception ->
+                    consecutiveFailures++
                     if (_uiState.value !is LibraryUiState.Success) {
                         _uiState.value = LibraryUiState.Error(exception.message ?: "Unknown error")
                     }
@@ -268,20 +278,39 @@ class LibraryViewModel @Inject constructor(
         }
     }
     
+    /**
+     * 优化后的轮询逻辑：
+     * - 仅在 Success 状态且有处理中的录音时轮询（5 秒间隔）
+     * - Success 状态无处理中的录音：延长到 30 秒静默轮询
+     * - Error 状态：使用指数退避（5s → 10s → 20s → 40s → 60s max）
+     * - Loading 状态不轮询，首次加载后由 loadRecordings 回调启动
+     */
     private fun startPolling() {
         pollingJob?.cancel()
         pollingJob = viewModelScope.launch {
             while (true) {
-                val currentState = _uiState.value
-                if (currentState is LibraryUiState.Success) {
-                    val hasProcessing = currentState.recordings.any { it.isProcessing }
-                    if (hasProcessing) {
+                when (val currentState = _uiState.value) {
+                    is LibraryUiState.Success -> {
+                        val hasProcessing = currentState.recordings.any { it.isProcessing }
+                        if (hasProcessing) {
+                            loadRecordings(showLoading = false)
+                            delay(5_000L) // 有处理中的任务：5 秒轮询
+                        } else {
+                            delay(30_000L) // 无处理中的任务：30 秒静默轮询
+                            loadRecordings(showLoading = false)
+                        }
+                    }
+                    is LibraryUiState.Error -> {
+                        // 指数退避：min(2^failures * 5s, 60s)
+                        val backoffSeconds = min((1 shl consecutiveFailures.coerceAtMost(4)) * 5L, 60L)
+                        delay(backoffSeconds * 1_000L)
                         loadRecordings(showLoading = false)
                     }
-                } else if (currentState is LibraryUiState.Loading || currentState is LibraryUiState.Error) {
-                    loadRecordings(showLoading = false)
+                    is LibraryUiState.Loading -> {
+                        // Loading 状态不主动轮询
+                        delay(5_000L)
+                    }
                 }
-                delay(5000)
             }
         }
     }

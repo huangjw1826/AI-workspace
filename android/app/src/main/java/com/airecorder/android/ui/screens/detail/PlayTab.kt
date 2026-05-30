@@ -1,6 +1,8 @@
 package com.airecorder.android.ui.screens.detail
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -31,6 +33,7 @@ sealed class AudioState {
     data class Error(val message: String) : AudioState()
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PlayTab(
     recordingDetail: RecordingDetail,
@@ -117,7 +120,7 @@ fun PlayTab(
                             modifier = Modifier.align(Alignment.End).padding(top = 4.dp),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                         ) {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Icon(Icons.Default.Delete, contentDescription = "删除音频", modifier = Modifier.size(14.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("删除音频", style = MaterialTheme.typography.labelSmall)
                         }
@@ -171,7 +174,10 @@ fun PlayTab(
                         segment = segment,
                         isPlaying = index == currentSegmentIndex,
                         isPlayed = index < currentSegmentIndex,
-                        onClick = { onSegmentClick(segment) }
+                        onClick = { onSegmentClick(segment) },
+                        modifier = Modifier.animateItem(
+                            placementSpec = tween(300)
+                        )
                     )
                 }
             }
@@ -222,7 +228,7 @@ fun CompactDownloadSection(
         ) {
             Icon(
                 imageVector = Icons.Default.CloudDownload,
-                contentDescription = null,
+                contentDescription = "下载音频",
                 modifier = Modifier.size(32.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
@@ -276,11 +282,12 @@ fun CompactDownloadingSection(
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = onPause, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Pause, contentDescription = null, modifier = Modifier.size(20.dp))
+                // 触控目标 ≥ 48dp，使用默认 IconButton 尺寸
+                IconButton(onClick = onPause) {
+                    Icon(Icons.Default.Pause, contentDescription = "暂停下载", modifier = Modifier.size(24.dp))
                 }
-                IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(20.dp))
+                IconButton(onClick = onCancel) {
+                    Icon(Icons.Default.Close, contentDescription = "取消下载", modifier = Modifier.size(24.dp))
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -322,8 +329,8 @@ fun CompactPausedSection(
             ) {
                 Text("继续", style = MaterialTheme.typography.labelSmall)
             }
-            IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(20.dp))
+            IconButton(onClick = onCancel) {
+                Icon(Icons.Default.Close, contentDescription = "取消下载", modifier = Modifier.size(24.dp))
             }
         }
     }
@@ -344,7 +351,7 @@ fun CompactErrorSection(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(Icons.Default.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+            Icon(Icons.Default.Error, contentDescription = "下载错误", tint = MaterialTheme.colorScheme.error)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "下载出错",

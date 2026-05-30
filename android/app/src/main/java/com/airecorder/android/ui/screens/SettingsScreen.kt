@@ -8,7 +8,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,12 +17,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewModelScope
 import com.airecorder.android.R
 import com.airecorder.android.data.local.PreferencesManager
 import com.airecorder.android.data.repository.SettingsRepository
+import com.airecorder.android.data.model.LLMSettings
+import com.airecorder.android.data.model.WatchSettings
+import com.airecorder.android.data.model.StorageSettings
+import com.airecorder.android.data.model.HealthResponse
 import com.airecorder.android.ui.navigation.NavDestinations
 import com.airecorder.android.ui.theme.*
 import com.airecorder.android.ui.util.rememberHapticFeedback
@@ -35,8 +37,8 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 sealed interface SettingsUiState<out T> {
-    object Loading : SettingsUiState<Nothing>
-    data class Success<T>(val data: T) : SettingsUiState<T>
+    data object Loading : SettingsUiState<Nothing>
+    data class Success<T : Any>(val data: T) : SettingsUiState<T>
     data class Error(val message: String) : SettingsUiState<Nothing>
 }
 
@@ -61,14 +63,17 @@ class SettingsViewModel @Inject constructor(
     private val _healthState = MutableStateFlow<HealthUiState>(HealthUiState.Loading)
     val healthState: StateFlow<HealthUiState> = _healthState.asStateFlow()
     
-    private val _llmSettingsState = MutableStateFlow<SettingsUiState<com.airecorder.android.data.model.LLMSettings>>(SettingsUiState.Loading)
-    val llmSettingsState: StateFlow<SettingsUiState<com.airecorder.android.data.model.LLMSettings>> = _llmSettingsState.asStateFlow()
+    private val _llmSettingsState = MutableStateFlow<SettingsUiState<LLMSettings>>(SettingsUiState.Loading)
+    val llmSettingsState: StateFlow<SettingsUiState<LLMSettings>> = _llmSettingsState.asStateFlow()
     
-    private val _watchSettingsState = MutableStateFlow<SettingsUiState<com.airecorder.android.data.model.WatchSettings>>(SettingsUiState.Loading)
-    val watchSettingsState: StateFlow<SettingsUiState<com.airecorder.android.data.model.WatchSettings>> = _watchSettingsState.asStateFlow()
+    private val _watchSettingsState = MutableStateFlow<SettingsUiState<WatchSettings>>(SettingsUiState.Loading)
+    val watchSettingsState: StateFlow<SettingsUiState<WatchSettings>> = _watchSettingsState.asStateFlow()
     
-    private val _storageSettingsState = MutableStateFlow<SettingsUiState<com.airecorder.android.data.model.StorageSettings>>(SettingsUiState.Loading)
-    val storageSettingsState: StateFlow<SettingsUiState<com.airecorder.android.data.model.StorageSettings>> = _storageSettingsState.asStateFlow()
+    private val _storageSettingsState = MutableStateFlow<SettingsUiState<StorageSettings>>(SettingsUiState.Loading)
+    val storageSettingsState: StateFlow<SettingsUiState<StorageSettings>> = _storageSettingsState.asStateFlow()
+    
+    private val _useDynamicColor = MutableStateFlow(true)
+    val useDynamicColor: StateFlow<Boolean> = _useDynamicColor.asStateFlow()
     
     init {
         viewModelScope.launch {
@@ -76,6 +81,9 @@ class SettingsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             preferencesManager.apiToken.collect { _apiToken.value = it }
+        }
+        viewModelScope.launch {
+            preferencesManager.dynamicColor.collect { _useDynamicColor.value = it }
         }
         loadHealth()
         loadSettings()
@@ -155,6 +163,14 @@ class SettingsViewModel @Inject constructor(
         preferencesManager.setServerUrl(_serverUrl.value)
         preferencesManager.setApiToken(_apiToken.value)
     }
+    
+    fun toggleDynamicColor() {
+        viewModelScope.launch {
+            val newValue = !_useDynamicColor.value
+            _useDynamicColor.value = newValue
+            preferencesManager.setDynamicColor(newValue)
+        }
+    }
 
     fun testConnection() {
         viewModelScope.launch {
@@ -164,7 +180,7 @@ class SettingsViewModel @Inject constructor(
             try {
                 settingsRepository.testConnection(_serverUrl.value, _apiToken.value)
                 _connectionTestResult.value = true
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 _connectionTestResult.value = false
             }
 
@@ -176,9 +192,7 @@ class SettingsViewModel @Inject constructor(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    viewModel: SettingsViewModel = hiltViewModel(),
-    onNavigateBack: () -> Unit,
-    onNavigateToLibrary: () -> Unit
+    viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val serverUrl by viewModel.serverUrl.collectAsState()
     val apiToken by viewModel.apiToken.collectAsState()
@@ -188,6 +202,7 @@ fun SettingsScreen(
     val llmSettingsState by viewModel.llmSettingsState.collectAsState()
     val watchSettingsState by viewModel.watchSettingsState.collectAsState()
     val storageSettingsState by viewModel.storageSettingsState.collectAsState()
+    val useDynamicColor by viewModel.useDynamicColor.collectAsState()
     val hapticFeedback = rememberHapticFeedback()
     val scope = rememberCoroutineScope()
 
@@ -200,15 +215,6 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back),
-                            tint = TextPrimary
-                        )
-                    }
                 },
                 actions = {
                     IconButton(onClick = {
@@ -392,7 +398,18 @@ fun SettingsScreen(
                 }
             }
             
-            // --- 5. About ---
+            // --- 5. Appearance ---
+            SettingsGroup(title = "外观") {
+                SettingsToggle(
+                    icon = Icons.Default.Palette,
+                    title = "动态取色",
+                    subtitle = "跟随系统壁纸自动调整主题色（Android 12+）",
+                    checked = useDynamicColor,
+                    onCheckedChange = { viewModel.toggleDynamicColor() }
+                )
+            }
+            
+            // --- 6. About ---
             SettingsGroup(title = "关于") {
                 SettingsRow(
                     icon = Icons.Default.Info,
@@ -483,6 +500,65 @@ private fun HealthDashboard(data: com.airecorder.android.data.model.HealthRespon
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsToggle(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String? = null,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            color = Background,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.size(36.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Primary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.width(12.dp))
+        
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = TextPrimary
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextTertiary,
+                    maxLines = 2
+                )
+            }
+        }
+        
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = OnPrimary,
+                checkedTrackColor = Primary,
+                uncheckedThumbColor = TextSecondary,
+                uncheckedTrackColor = DividerLight
+            )
+        )
     }
 }
 

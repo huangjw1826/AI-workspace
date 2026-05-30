@@ -4,12 +4,30 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <group android:scaleX="0.5"
-        android:scaleY="0.5"
-        android:translateX="27"
-        android:translateY="27">
-        <path
-            android:fillColor="#FFFFFF"
-            android:pathData="M54,27C54,24.79 52.21,23 50,23H58C59.79,23 61,24.79 61,27V55C61,57.21 59.79,59 58,59H50C48.21,59 47,57.21 47,55V27M54,63C58.42,63 62,59.42 62,55V27C62,22.58 58.42,19 54,19C49.58,19 46,22.58 46,27V55C46,59.42 49.58,63 54,63M70,55V55C70,63.28 63.28,70 55,70C46.72,70 40,63.28 40,55H34C34,66.05 42.95,75 54,75C65.05,75 74,66.05 74,55H70Z"/>
-    </group>
+
+    <!-- Minimalist Microphone Capsule -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,32m-10,0a10,10 0,1 1,20 0l0,22a10,10 0,1 1,-20 0z" />
+
+    <!-- Microphone Stand/U-bracket -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M38,54a16,16 0,0 0,32 0M54,70l0,8" />
+
+    <!-- Base -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M44,78l20,0" />
+
+    <!-- AI Sparkle (Representative of Intelligence) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M76,34l2,-6l2,6l6,2l-6,2l-2,6l-2,-6l-6,-2z" />
+
 </vector>

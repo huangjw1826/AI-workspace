@@ -10,7 +10,7 @@ import javax.inject.Singleton
 
 @Singleton
 class AuthInterceptor @Inject constructor(
-    private val tokenProvider: TokenProvider
+    private val tokenProvider: TokenProvider,
 ) : Interceptor {
     
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -54,4 +54,11 @@ class AuthInterceptor @Inject constructor(
 interface TokenProvider {
     suspend fun getToken(): kotlinx.coroutines.flow.Flow<String>
     suspend fun getServerUrl(): kotlinx.coroutines.flow.Flow<String>
+}
+
+class DefaultTokenProvider @Inject constructor(
+    private val preferencesManager: com.airecorder.android.data.local.PreferencesManager
+) : TokenProvider {
+    override suspend fun getToken(): kotlinx.coroutines.flow.Flow<String> = preferencesManager.apiToken
+    override suspend fun getServerUrl(): kotlinx.coroutines.flow.Flow<String> = preferencesManager.serverUrl
 }

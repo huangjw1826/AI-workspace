@@ -14,8 +14,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import com.airecorder.android.data.model.Recording
 import com.airecorder.android.ui.theme.*
@@ -29,6 +33,7 @@ fun RecordingItem(
     isSelectionMode: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onPositioned: ((LayoutCoordinates) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val cardColor = if (isSelected) {
@@ -40,11 +45,12 @@ fun RecordingItem(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
             .combinedClickable(
                 onClick = if (isSelectionMode) onLongClick else onClick,
                 onLongClick = onLongClick
-            ),
+            )
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .then(if (onPositioned != null) Modifier.onGloballyPositioned { onPositioned(it) } else Modifier),
         colors = CardDefaults.cardColors(
             containerColor = cardColor
         ),
@@ -61,7 +67,9 @@ fun RecordingItem(
                 RadioButton(
                     selected = isSelected,
                     onClick = onLongClick,
-                    modifier = Modifier.padding(end = 12.dp)
+                    modifier = Modifier
+                        .padding(end = 12.dp)
+                        .semantics { contentDescription = if (isSelected) "已选择 ${recording.filename}" else "选择 ${recording.filename}" }
                 )
             }
             
@@ -80,14 +88,14 @@ fun RecordingItem(
                     if (isSelected) {
                         Icon(
                             imageVector = Icons.Default.Check,
-                            contentDescription = null,
+                            contentDescription = "已选择",
                             tint = OnPrimary,
                             modifier = Modifier.size(24.dp)
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Default.Mic,
-                            contentDescription = null,
+                            contentDescription = "录音",
                             tint = Primary,
                             modifier = Modifier.size(24.dp)
                         )

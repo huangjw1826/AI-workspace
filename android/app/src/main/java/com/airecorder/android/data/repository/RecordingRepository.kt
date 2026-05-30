@@ -99,7 +99,7 @@ class RecordingRepository @Inject constructor(
     }
 
     sealed class DownloadStatus {
-        object Started : DownloadStatus()
+        data object Started : DownloadStatus()
         data class Progress(val progress: Float, val downloaded: Long, val total: Long) : DownloadStatus()
         data class Success(val file: File) : DownloadStatus()
         data class Error(val message: String) : DownloadStatus()

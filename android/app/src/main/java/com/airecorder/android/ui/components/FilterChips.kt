@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.dp
 
 data class FilterOption(
@@ -34,7 +35,55 @@ enum class SortOption(val id: String, val label: String) {
     LARGEST("largest", "文件最大")
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun SimpleFlowLayout(
+    modifier: Modifier = Modifier,
+    horizontalSpacing: Int = 8,
+    verticalSpacing: Int = 8,
+    content: @Composable () -> Unit
+) {
+    Layout(
+        modifier = modifier,
+        content = content
+    ) { measurables, constraints ->
+        val placeables = measurables.map { it.measure(constraints.copy(minWidth = 0)) }
+        
+        val rows = mutableListOf<List<androidx.compose.ui.layout.Placeable>>()
+        var currentRow = mutableListOf<androidx.compose.ui.layout.Placeable>()
+        var currentRowWidth = 0
+        
+        val horizontalSpacingPx = horizontalSpacing.dp.roundToPx()
+        val verticalSpacingPx = verticalSpacing.dp.roundToPx()
+
+        placeables.forEach { placeable ->
+            if (currentRowWidth + placeable.width > constraints.maxWidth && currentRow.isNotEmpty()) {
+                rows.add(currentRow)
+                currentRow = mutableListOf()
+                currentRowWidth = 0
+            }
+            currentRow.add(placeable)
+            currentRowWidth += placeable.width + horizontalSpacingPx
+        }
+        rows.add(currentRow)
+
+        val height = rows.sumOf { row -> row.maxOf { it.height } } + (rows.size - 1) * verticalSpacingPx
+        val width = constraints.maxWidth
+
+        layout(width, height) {
+            var y = 0
+            rows.forEach { row ->
+                var x = 0
+                val rowHeight = row.maxOf { it.height }
+                row.forEach { placeable ->
+                    placeable.placeRelative(x, y)
+                    x += placeable.width + horizontalSpacingPx
+                }
+                y += rowHeight + verticalSpacingPx
+            }
+        }
+    }
+}
+
 @Composable
 fun FilterChips(
     selectedStatuses: Set<String>,
@@ -51,10 +100,10 @@ fun FilterChips(
             .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        FlowRow(
+        SimpleFlowLayout(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp)
+            horizontalSpacing = 8,
+            verticalSpacing = 4
         ) {
             statusFilters.forEach { filter ->
                 FilterChip(

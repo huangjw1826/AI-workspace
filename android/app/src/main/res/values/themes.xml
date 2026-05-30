@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.AIRecorder" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Splash Screen 主题：使用品牌色作为启动背景，消除冷启动白屏 -->
+    <style name="Theme.AIRecorder.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.AIRecorder</item>
+    </style>
+
+    <style name="Theme.AIRecorder" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/splash_background</item>
+    </style>
 </resources>
