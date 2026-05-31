@@ -67,6 +67,7 @@ class ASRService:
         - ASR 模型：paraformer-zh（语音识别）
         - VAD 模型：fsmn-vad（语音活动检测）
         - 标点模型：ct-punc（标点恢复）
+        - 说话人模型：cam++（说话人分离，可选）
 
         模型默认从 Modelscope 下载到 MODEL_DIR，由 MODELSCOPE_CACHE 环境变量指定。
         """
@@ -74,15 +75,21 @@ class ASRService:
             return self._model
         from funasr import AutoModel
 
-        self._model = AutoModel(
-            model=self.settings.asr_model,
-            vad_model=self.settings.asr_vad_model,
-            punc_model=self.settings.asr_punc_model,
-            device=self.settings.asr_device,
-            model_revision="master",
-            vad_model_revision="master",
-            punc_model_revision="master",
-        )
+        kwargs: dict[str, Any] = {
+            "model": self.settings.asr_model,
+            "vad_model": self.settings.asr_vad_model,
+            "punc_model": self.settings.asr_punc_model,
+            "device": self.settings.asr_device,
+            "model_revision": "master",
+            "vad_model_revision": "master",
+            "punc_model_revision": "master",
+        }
+
+        if self.settings.asr_enable_diarization:
+            kwargs["spk_model"] = self.settings.asr_spk_model
+            kwargs["spk_model_revision"] = "master"
+
+        self._model = AutoModel(**kwargs)
         return self._model
 
     def transcribe(self, audio_path: Path) -> list[Segment]:
@@ -94,6 +101,7 @@ class ASRService:
         3. 加载模型并执行 generate
         4. 从结果中提取时间戳和文本
         5. 按句子边界 + 时间戳对齐生成有序片段列表
+        6. 如启用说话人分离，从 sentences 中提取 speaker 标签
 
         Args:
             audio_path: 归一化后的音频文件路径（16kHz 单声道 WAV）
@@ -114,6 +122,22 @@ class ASRService:
             return []
 
         first = result[0] if isinstance(result, list) else result
+
+        if self.settings.asr_enable_diarization:
+            sentences = first.get("sentences", []) if isinstance(first, dict) else []
+            if sentences:
+                segments: list[Segment] = []
+                for sent in sentences:
+                    speaker_id = sent.get("spk", 0)
+                    speaker = f"speaker_{int(speaker_id) + 1}" if speaker_id is not None else "speaker_1"
+                    segments.append(Segment(
+                        start_time=round(float(sent.get("start", 0)) / 1000, 3),
+                        end_time=round(float(sent.get("end", 0)) / 1000, 3),
+                        text=str(sent.get("text", "")).strip(),
+                        speaker=speaker,
+                    ))
+                return [s for s in segments if s.text]
+
         text = first.get("text", "") if isinstance(first, dict) else str(first)
         timestamps = first.get("timestamp", []) if isinstance(first, dict) else []
 

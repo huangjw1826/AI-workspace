@@ -70,8 +70,8 @@ class Settings(BaseSettings):
     asr_model: str = "paraformer-zh"
     asr_vad_model: str = "fsmn-vad"
     asr_punc_model: str = "ct-punc"
-    asr_timestamp_model: str = "fa-zh"
     asr_enable_diarization: bool = False
+    asr_spk_model: str = "cam++"
     asr_max_concurrency: int = 1
 
     # --- LLM（大模型摘要）配置 ---

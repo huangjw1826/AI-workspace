@@ -1,4 +1,4 @@
-#!C:\Users\13318\Documents\AI workspace\.venv\Scripts\python.exe
+#!D:\AI-workspace\.venv\Scripts\python.exe
 
 import sys
 import json

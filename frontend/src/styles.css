@@ -1039,6 +1039,19 @@ progress {
   gap: 8px;
 }
 
+.segment-speaker {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .segment-editor {
   display: grid;
   gap: 8px;

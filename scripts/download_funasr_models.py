@@ -10,7 +10,7 @@ os.environ["MODELSCOPE_CACHE"] = str(MODEL_DIR)
 os.environ["PATH"] = str(FFMPEG_DIR) + os.pathsep + os.environ.get("PATH", "")
 
 print(f"MODELSCOPE_CACHE={MODEL_DIR}", flush=True)
-print("Loading FunASR AutoModel: paraformer-zh + fsmn-vad + ct-punc", flush=True)
+print("Loading FunASR AutoModel: paraformer-zh + fsmn-vad + ct-punc + cam++", flush=True)
 
 from funasr import AutoModel
 
@@ -18,10 +18,12 @@ model = AutoModel(
     model="paraformer-zh",
     vad_model="fsmn-vad",
     punc_model="ct-punc",
+    spk_model="cam++",
     device="cpu",
     model_revision="master",
     vad_model_revision="master",
     punc_model_revision="master",
+    spk_model_revision="master",
 )
 
 print("FunASR models loaded successfully.", flush=True)

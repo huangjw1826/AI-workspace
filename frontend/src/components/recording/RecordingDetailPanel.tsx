@@ -196,7 +196,10 @@ export function RecordingDetailPanel(props: {
       </div>
       </div>
       <div className="detail-scroll-region">
-      {props.detailTab === "transcript" && (
+      {props.detailTab === "transcript" && (() => {
+        const speakerSet = new Set(selected.segments.map((s) => s.speaker));
+        const showSpeaker = speakerSet.size > 1;
+        return (
         <section className="tab-body">
           <div className="section-head"><h3>转写内容</h3>{selected.segments.length > 0 && <ExportButtons onExport={props.downloadTranscript} formats={["md", "txt", "json", "srt", "docx"]} />}</div>
           {selected.segments.length === 0 ? <p className="muted">还没有转写结果。</p> : selected.segments.map((segment) => {
@@ -205,6 +208,9 @@ export function RecordingDetailPanel(props: {
             return (
               <article className={active ? "segment active" : "segment"} key={segment.id}>
                 <div className="segment-toolbar">
+                  {showSpeaker && (
+                    <span className="segment-speaker">{segment.speaker.replace("speaker_", "说话人 ")}</span>
+                  )}
                   <button className="segment-time" onClick={() => seekTo(segment.start_time)}>
                     <Clock3 size={13} /> {formatDuration(segment.start_time)} - {formatDuration(segment.end_time)}
                   </button>
@@ -225,7 +231,8 @@ export function RecordingDetailPanel(props: {
             );
           })}
         </section>
-      )}
+        );
+      })()}
       {props.detailTab === "summary" && (
         <section className="tab-body">
           <div className="section-head">
