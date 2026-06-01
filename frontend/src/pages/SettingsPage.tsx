@@ -9,7 +9,7 @@ import type {
   StorageSettings,
 } from "../lib/types";
 
-type StorageDraft = Pick<StorageSettings, "transcript_dir" | "summary_dir">;
+type StorageDraft = Pick<StorageSettings, "data_dir" | "transcript_dir" | "summary_dir">;
 
 export function SettingsPage({
   storageDraft,
@@ -41,6 +41,16 @@ export function SettingsPage({
   return (
     <section className="main-panel page-panel settings-page">
       <SettingsSection title="保存位置" icon={<HardDrive size={17} />}>
+        <label>
+          <span>数据总目录</span>
+          <FolderPicker
+            value={storageDraft.data_dir}
+            onChange={(path) => setStorageDraft((draft) => ({ ...draft, data_dir: path }))}
+            placeholder={storageSettings?.data_dir || "存放录音、数据库等所有数据的文件夹"}
+            disabled={settingsBusy}
+          />
+          <span className="muted">修改后需重启应用。多电脑共享数据？改到同步盘文件夹即可</span>
+        </label>
         <label>
           <span>转写保存目录</span>
           <FolderPicker

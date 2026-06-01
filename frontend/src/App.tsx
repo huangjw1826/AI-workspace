@@ -17,6 +17,8 @@ import {
   listRecordings,
   listSummaryTemplates,
   listWatchEvents,
+  migrateStorage,
+  previewStorageMigration,
   scanWatchDirectory,
   startSummary,
   startSummaryBatch,
@@ -38,6 +40,7 @@ import type {
   LlmSettingsUpdate,
   Recording,
   RecordingDetail,
+  StorageMigrationPreview,
   StorageSettings,
   SummaryTemplate,
   Task,
@@ -141,9 +144,10 @@ export default function App() {
     watch_dir: "",
     recursive: true,
     interval_seconds: 10,
+    stable_count: 2,
     exists: false,
   });
-  const [storageDraft, setStorageDraft] = React.useState({ transcript_dir: "", summary_dir: "" });
+  const [storageDraft, setStorageDraft] = React.useState({ data_dir: "", transcript_dir: "", summary_dir: "" });
 
   function showToast(message: string, tone: ToastMessage["tone"] = "info") {
     const id = Date.now() + Math.random();
@@ -265,6 +269,7 @@ export default function App() {
         const storageResult = await getStorageSettings();
         setStorageSettings(storageResult);
         setStorageDraft({
+          data_dir: storageResult.data_dir,
           transcript_dir: storageResult.transcript_dir,
           summary_dir: storageResult.summary_dir,
         });
@@ -560,12 +565,121 @@ export default function App() {
   }
 
   async function saveStorageSettings() {
+    const oldDataDir = storageSettings?.data_dir ?? "";
+    const newDataDir = storageDraft.data_dir?.trim() ?? "";
+    if (newDataDir && newDataDir !== oldDataDir) {
+      setSettingsBusy(true);
+      showToast("正在分析新旧目录的数据差异…", "info");
+      let preview: StorageMigrationPreview | null = null;
+      try {
+        preview = await previewStorageMigration(newDataDir);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        showToast("无法读取目录数据，请检查路径是否正确", "error");
+        setSettingsBusy(false);
+        return;
+      }
+      setSettingsBusy(false);
+
+      const o = preview.old;
+      const n = preview.new;
+      const hasDb = o.recordings != null;
+
+      function _formatDir(label: string, dir: string, s: typeof o): string {
+        const lines: string[] = [];
+        lines.push(`${label} ${dir}`);
+        if (!s.exists) {
+          lines.push("  · 目录不存在");
+          return lines.join("\n");
+        }
+        if (hasDb) {
+          lines.push(`  · 录音记录：${s.recordings ?? 0} 条`);
+          lines.push(`  · 转写任务：${s.tasks ?? 0} 个`);
+          lines.push(`  · 摘要：${s.summaries ?? 0} 条`);
+          lines.push(`  · 转写片段：${s.transcript_segments ?? 0} 条`);
+        }
+        lines.push(`  · 数据库：${(s.app_db_size_mb ?? 0).toFixed(1)} MB`);
+        lines.push(`  · 原始音频：${s.recording_count ?? 0} 个（${(s.recording_size_mb ?? 0).toFixed(1)} MB）`);
+        lines.push(`  · 归一化音频：${s.normalized_count ?? 0} 个（${(s.normalized_size_mb ?? 0).toFixed(1)} MB）`);
+        return lines.join("\n");
+      }
+
+      const oldText = _formatDir("📂 当前目录", oldDataDir, o);
+      const newText = _formatDir("📂 新目录", newDataDir, n);
+      const totalSize = (o.app_db_size_mb ?? 0) + (o.recording_size_mb ?? 0) + (o.normalized_size_mb ?? 0);
+      const newHasData = (hasDb && n.recordings !== 0) || n.recording_count > 0 || (n.app_db_size_mb ?? 0) > 0;
+      const isMerge = newHasData;
+
+      let warning = "";
+      if (isMerge) {
+        const oldRec = o.recordings ?? 0;
+        const newRec = n.recordings ?? 0;
+        warning =
+          "\n\n⚠ 新旧目录都有数据！将执行增量合并：\n" +
+          `  · 数据库：旧库 ${oldRec} 条 → 新库 ${newRec} 条 → 合并后 ${oldRec + newRec} 条（UUID 去重）\n` +
+          "  · 音频文件：同名文件保留新目录版本，仅补充缺失文件\n" +
+          "  · 合并后两边的录音记录都会保留，不会丢失任何数据";
+      }
+      if (totalSize > 1000) {
+        warning += `\n\n⚠ 数据量较大（约 ${(totalSize / 1024).toFixed(1)} GB），请耐心等待。`;
+      }
+
+      const verb = isMerge ? "合并" : "迁移";
+      const title = isMerge ? "确认合并数据目录" : "确认迁移数据目录";
+      const header = isMerge
+        ? "合并操作将把当前目录的数据合并到新目录，新目录已有的数据会保留。"
+        : "迁移操作将把当前目录下的所有数据复制到新目录。";
+      const contentSection = isMerge
+        ? "── 合并内容 ──\n① 数据库逐表合并（INSERT OR IGNORE，UUID 去重）\n② 缺失的原始音频文件（recordings/）\n③ 缺失的归一化音频文件（normalized/）"
+        : "── 迁移内容 ──\n① 数据库文件（app.db）— 录音记录、任务、转写、摘要\n② 原始音频文件（recordings/）\n③ 归一化音频文件（normalized/）";
+      const btnLabel = isMerge ? "开始合并数据" : "开始迁移数据";
+
+      setConfirmDialog({
+        title,
+        message:
+          header + "\n\n" +
+          oldText + "\n\n" +
+          newText + "\n\n" +
+          contentSection + "\n\n" +
+          "── 注意事项 ──\n" +
+          "· 旧目录文件保留不动，不会删除或修改\n" +
+          "· 修改 .env 文件后需重启应用才能生效\n" +
+          "· 建议合并前关闭其他终端上的应用" +
+          warning,
+        confirmLabel: btnLabel,
+        tone: "danger",
+        onConfirm: async () => {
+          setConfirmDialog(null);
+          setSettingsBusy(true);
+          showToast(`正在${verb}数据库和文件…`, "info");
+          try {
+            const migResult = await migrateStorage(newDataDir);
+            for (const line of migResult.results) {
+              showToast(line, "success");
+            }
+            showToast("正在更新配置文件…", "info");
+            await doSaveStorageSettings();
+            showToast(`数据${verb}完成，请重启应用使新目录生效`, "success");
+          } catch (err) {
+            showToast(`${verb}失败：` + (err instanceof Error ? err.message : String(err)), "error");
+            setError(err instanceof Error ? err.message : String(err));
+          } finally {
+            setSettingsBusy(false);
+          }
+        },
+      });
+      return;
+    }
+    await doSaveStorageSettings();
+  }
+
+  async function doSaveStorageSettings() {
     setSettingsBusy(true);
     setError("");
     try {
       const updated = await updateStorageSettings(storageDraft);
       setStorageSettings(updated);
-      setStorageDraft({ transcript_dir: updated.transcript_dir, summary_dir: updated.summary_dir });
+      setStorageDraft({ data_dir: updated.data_dir, transcript_dir: updated.transcript_dir, summary_dir: updated.summary_dir });
       showToast("保存位置已更新", "success");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -727,6 +841,26 @@ export default function App() {
         </header>
 
         {error && <div className="error">{error}</div>}
+
+        {view === "library" && recordings.length === 0 && (
+          <div className="setup-banner">
+            <h2>👋 欢迎使用 AI Recorder</h2>
+            <p>
+              当前数据目录：<code>{storageSettings?.data_dir ?? "未设置"}</code>
+            </p>
+            <div className="setup-steps">
+              <div className="setup-step">
+                <strong>新设备，想连接到已有数据？</strong>
+                <p>去设置页把"数据总目录"改成同步盘文件夹（如 OneDrive、Syncthing），然后按提示迁移即可。</p>
+              </div>
+              <div className="setup-step">
+                <strong>全新开始？</strong>
+                <p>上传录音或者设置目录监控即可自动发现音频文件。</p>
+              </div>
+            </div>
+            <button className="primary" onClick={() => setViewWithNavigate("settings")}>前往设置页面</button>
+          </div>
+        )}
 
         {view === "library" && (
           <LibraryPage

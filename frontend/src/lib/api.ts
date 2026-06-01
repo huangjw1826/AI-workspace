@@ -13,6 +13,8 @@ import type {
   Recording,
   RecordingDetail,
   SearchResult,
+  StorageMigrationPreview,
+  StorageMigrationResult,
   StorageSettings,
   SummaryTemplate,
   Task,
@@ -161,11 +163,25 @@ export function getStorageSettings() {
 }
 
 /** 更新存储目录设置 */
-export function updateStorageSettings(settings: Pick<StorageSettings, "transcript_dir" | "summary_dir">) {
+export function updateStorageSettings(settings: Pick<StorageSettings, "data_dir" | "transcript_dir" | "summary_dir">) {
   return request<StorageSettings>("/api/settings/storage", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(settings)
+  });
+}
+
+/** 预览数据目录迁移差异 */
+export function previewStorageMigration(newDataDir: string) {
+  return request<StorageMigrationPreview>(`/api/settings/storage/migration-preview?new_data_dir=${encodeURIComponent(newDataDir)}`);
+}
+
+/** 执行数据目录迁移 */
+export function migrateStorage(dataDir: string) {
+  return request<StorageMigrationResult>("/api/settings/storage/migrate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ data_dir: dataDir }),
   });
 }
 

@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 from sqlmodel import Session
 
 from app.api.auth import LocalBypassTokenMiddleware
@@ -188,6 +189,12 @@ def create_app() -> FastAPI:
         logger = get_logger()
 
         await watcher.stop()
+
+        try:
+            with engine.begin() as connection:
+                connection.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))
+        except Exception as exc:
+            logger.error("WAL checkpoint failed: %s", exc)
 
         if settings.remote_access_enabled:
             try:

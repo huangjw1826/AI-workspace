@@ -124,7 +124,7 @@ class ASRService:
         first = result[0] if isinstance(result, list) else result
 
         if self.settings.asr_enable_diarization:
-            sentences = first.get("sentences", []) if isinstance(first, dict) else []
+            sentences = first.get("sentence_info", []) if isinstance(first, dict) else []
             if sentences:
                 segments: list[Segment] = []
                 for sent in sentences:

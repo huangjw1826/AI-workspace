@@ -1,9 +1,14 @@
+import shutil
+import sqlite3
 from pathlib import Path
 from time import perf_counter
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from openai import OpenAI
 from pydantic import BaseModel, Field
+from sqlalchemy import create_engine as sa_create_engine
+from sqlmodel import Session as SaSession
+from sqlalchemy import text
 
 from app.config import LLM_PROVIDER_DEFAULTS, get_settings
 
@@ -39,6 +44,7 @@ class WatchSettingsRead(BaseModel):
     watch_dir: str
     recursive: bool
     interval_seconds: int
+    stable_count: int
     exists: bool
 
 
@@ -47,9 +53,11 @@ class WatchSettingsUpdate(BaseModel):
     watch_dir: str = ""
     recursive: bool = True
     interval_seconds: int = Field(default=10, ge=2, le=3600)
+    stable_count: int = Field(default=2, ge=2, le=20)
 
 
 class StorageSettingsRead(BaseModel):
+    data_dir: str
     transcript_dir: str
     summary_dir: str
     transcript_exists: bool
@@ -57,6 +65,7 @@ class StorageSettingsRead(BaseModel):
 
 
 class StorageSettingsUpdate(BaseModel):
+    data_dir: str = ""
     transcript_dir: str = ""
     summary_dir: str = ""
 
@@ -225,6 +234,7 @@ def _watch_settings_payload() -> WatchSettingsRead:
         watch_dir=watch_dir,
         recursive=settings.watch_recursive,
         interval_seconds=settings.watch_interval_seconds,
+        stable_count=settings.watch_stable_count,
         exists=bool(settings.resolved_watch_dir and settings.resolved_watch_dir.is_dir()),
     )
 
@@ -252,6 +262,7 @@ def update_watch_settings(payload: WatchSettingsUpdate) -> WatchSettingsRead:
             "WATCH_DIR": watch_dir,
             "WATCH_RECURSIVE": "true" if payload.recursive else "false",
             "WATCH_INTERVAL_SECONDS": str(payload.interval_seconds),
+            "WATCH_STABLE_COUNT": str(payload.stable_count),
         },
     )
     get_settings.cache_clear()
@@ -261,6 +272,7 @@ def update_watch_settings(payload: WatchSettingsUpdate) -> WatchSettingsRead:
 def _storage_settings_payload() -> StorageSettingsRead:
     settings = get_settings()
     return StorageSettingsRead(
+        data_dir=str(settings.resolved_data_dir),
         transcript_dir=str(settings.resolved_transcript_dir),
         summary_dir=str(settings.resolved_summary_dir),
         transcript_exists=settings.resolved_transcript_dir.is_dir(),
@@ -277,6 +289,7 @@ def get_storage_settings() -> StorageSettingsRead:
 def update_storage_settings(payload: StorageSettingsUpdate) -> StorageSettingsRead:
     transcript_dir = payload.transcript_dir.strip()
     summary_dir = payload.summary_dir.strip()
+    data_dir = payload.data_dir.strip()
     if not transcript_dir or not summary_dir:
         raise HTTPException(status_code=400, detail="转写和摘要保存目录都不能为空")
 
@@ -290,12 +303,179 @@ def update_storage_settings(payload: StorageSettingsUpdate) -> StorageSettingsRe
     if not transcript_path.is_dir() or not summary_path.is_dir():
         raise HTTPException(status_code=400, detail="保存路径必须是文件夹")
 
-    _write_env(
-        Path(".env"),
-        {
-            "TRANSCRIPT_DIR": str(transcript_path),
-            "SUMMARY_DIR": str(summary_path),
-        },
-    )
+    env_updates = {
+        "TRANSCRIPT_DIR": str(transcript_path),
+        "SUMMARY_DIR": str(summary_path),
+    }
+    if data_dir:
+        data_path = Path(data_dir).expanduser().resolve()
+        try:
+            data_path.mkdir(parents=True, exist_ok=True)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"无法创建数据目录：{exc}") from exc
+        if not data_path.is_dir():
+            raise HTTPException(status_code=400, detail="数据目录路径必须是文件夹")
+        env_updates["DATA_DIR"] = str(data_path)
+
+    _write_env(Path(".env"), env_updates)
     get_settings.cache_clear()
     return _storage_settings_payload()
+
+
+class StorageMigrateRequest(BaseModel):
+    data_dir: str
+
+
+def _db_record_counts(db_path: Path) -> dict[str, int]:
+    if not db_path.exists():
+        return {}
+    engine = sa_create_engine(f"sqlite:///{db_path.as_posix()}", connect_args={"check_same_thread": False})
+    try:
+        with SaSession(engine) as session:
+            return {
+                "recordings": session.execute(text("SELECT COUNT(*) FROM recording")).scalar() or 0,
+                "tasks": session.execute(text("SELECT COUNT(*) FROM task")).scalar() or 0,
+                "transcript_segments": session.execute(text("SELECT COUNT(*) FROM transcriptsegment")).scalar() or 0,
+                "summaries": session.execute(text("SELECT COUNT(*) FROM summary")).scalar() or 0,
+            }
+    except Exception:
+        return {}
+    finally:
+        engine.dispose()
+
+
+def _dir_file_counts(dir_path: Path) -> dict[str, object]:
+    """统计目录下的文件和数据库概况。"""
+    stats: dict[str, object] = {
+        "exists": dir_path.exists(),
+        "app_db_size_mb": 0,
+        "recording_count": 0,
+        "recording_size_mb": 0,
+        "normalized_count": 0,
+        "normalized_size_mb": 0,
+    }
+    db_file = dir_path / "app.db"
+    if db_file.is_file():
+        stats["app_db_size_mb"] = round(db_file.stat().st_size / (1024 * 1024), 1)
+    recordings = dir_path / "recordings"
+    if recordings.is_dir():
+        rec_files = [f for f in recordings.iterdir() if f.is_file()]
+        stats["recording_count"] = len(rec_files)
+        stats["recording_size_mb"] = round(sum(f.stat().st_size for f in rec_files) / (1024 * 1024), 1)
+    normalized = dir_path / "normalized"
+    if normalized.is_dir():
+        norm_files = [f for f in normalized.iterdir() if f.is_file()]
+        stats["normalized_count"] = len(norm_files)
+        stats["normalized_size_mb"] = round(sum(f.stat().st_size for f in norm_files) / (1024 * 1024), 1)
+
+    db_counts = _db_record_counts(db_file)
+    stats.update(db_counts)
+    return stats
+
+
+@router.get("/storage/migration-preview")
+def preview_storage_migration(new_data_dir: str = Query(..., description="新的数据总目录路径")) -> dict[str, object]:
+    settings = get_settings()
+    old_dir = settings.resolved_data_dir
+    new_dir = Path(new_data_dir).expanduser().resolve()
+
+    if old_dir.resolve() == new_dir.resolve():
+        raise HTTPException(status_code=400, detail="新旧数据目录相同，无需迁移")
+
+    return {
+        "old_dir": str(old_dir),
+        "new_dir": str(new_dir),
+        "old": _dir_file_counts(old_dir),
+        "new": _dir_file_counts(new_dir),
+    }
+
+
+def _merge_databases(old_db: Path, new_db: Path) -> str:
+    src = sqlite3.connect(str(old_db))
+    dst = sqlite3.connect(str(new_db))
+    dst.execute("PRAGMA foreign_keys=OFF")
+
+    table_order = ["recording", "apitoken", "task", "transcriptsegment", "summary", "watchevent", "accesslog"]
+    done: list[str] = []
+
+    for table in table_order:
+        src_columns = _table_columns(src, table)
+        if not src_columns:
+            continue
+        dst_columns = _table_columns(dst, table)
+        common = [c for c in src_columns if c in dst_columns]
+        if not common:
+            continue
+
+        col_list = ", ".join(f'"{c}"' for c in common)
+        placeholders = ", ".join("?" for _ in common)
+        src_rows = src.execute(f"SELECT {col_list} FROM {table}").fetchall()
+        if not src_rows:
+            continue
+        dst.executemany(f"INSERT OR IGNORE INTO {table} ({col_list}) VALUES ({placeholders})", src_rows)
+        done.append(f"{table}:{len(src_rows)}")
+
+    dst.execute("PRAGMA foreign_keys=ON")
+    dst.commit()
+    src.close()
+    dst.close()
+    return f"数据库已合并 ({', '.join(done)} 条)"
+
+
+def _table_columns(conn: sqlite3.Connection, table: str) -> list[str]:
+    rows = conn.execute(f'PRAGMA table_info("{table}")').fetchall()
+    return [r[1] for r in rows]
+
+
+@router.post("/storage/migrate")
+def migrate_storage(payload: StorageMigrateRequest) -> dict[str, object]:
+    settings = get_settings()
+    old_dir = settings.resolved_data_dir
+    new_dir = Path(payload.data_dir).expanduser().resolve()
+
+    if old_dir.resolve() == new_dir.resolve():
+        raise HTTPException(status_code=400, detail="新旧目录相同，无需迁移")
+
+    new_dir.mkdir(parents=True, exist_ok=True)
+    results: list[str] = []
+
+    old_db = old_dir / "app.db"
+    new_db = new_dir / "app.db"
+    if old_db.exists():
+        if not new_db.exists():
+            try:
+                src_conn = sqlite3.connect(str(old_db))
+                dst_conn = sqlite3.connect(str(new_db))
+                src_conn.backup(dst_conn)
+                src_conn.close()
+                dst_conn.close()
+                results.append(f"数据库已迁移（{round(old_db.stat().st_size / (1024 * 1024), 1)} MB）")
+            except Exception:
+                shutil.copy2(old_db, new_db)
+                results.append(f"数据库已复制（{round(old_db.stat().st_size / (1024 * 1024), 1)} MB）")
+        else:
+            merge_result = _merge_databases(old_db, new_db)
+            results.append(merge_result)
+
+    for subdir in ["recordings", "normalized"]:
+        old_sub = old_dir / subdir
+        new_sub = new_dir / subdir
+        if not old_sub.is_dir():
+            continue
+        copied = 0
+        skipped = 0
+        for f in old_sub.iterdir():
+            if not f.is_file():
+                continue
+            dest = new_sub / f.name
+            if not dest.exists():
+                new_sub.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(f, dest)
+                copied += 1
+            else:
+                skipped += 1
+        label_map = {"recordings": "录音文件", "normalized": "归一化音频"}
+        label = label_map.get(subdir, subdir)
+        results.append(f"{label}：复制 {copied} 个，跳过 {skipped} 个（已存在）")
+
+    return {"ok": True, "results": results}

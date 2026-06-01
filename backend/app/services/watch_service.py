@@ -24,6 +24,27 @@ from app.db.database import engine
 from app.models import Recording, WatchEvent
 from app.services.file_service import audio_suffix, content_hash, is_supported_audio
 
+SYNC_IGNORE_SUFFIXES = {".tmp", ".temp", ".part", ".crdownload", ".download"}
+SYNC_IGNORE_PREFIXES = ("~$",)
+SYNC_CONFLICT_KEYWORDS = ("conflicted copy",)
+
+
+def _is_sync_temp_file(path: Path) -> bool:
+    name = path.name
+    if name.startswith(".") or name.startswith("._"):
+        return True
+    for prefix in SYNC_IGNORE_PREFIXES:
+        if name.startswith(prefix):
+            return True
+    suffix_lower = path.suffix.lower()
+    if suffix_lower in SYNC_IGNORE_SUFFIXES:
+        return True
+    name_lower = name.lower()
+    for keyword in SYNC_CONFLICT_KEYWORDS:
+        if keyword in name_lower:
+            return True
+    return False
+
 
 @dataclass
 class FileSnapshot:
@@ -113,6 +134,8 @@ class DirectoryWatcher:
         for path in files:
             if not path.is_file():
                 continue
+            if _is_sync_temp_file(path):
+                continue
             event = self._process_path(path, force_stable=force_stable)
             if event is not None:
                 events.append(event)
@@ -140,9 +163,10 @@ class DirectoryWatcher:
         self._snapshots[snapshot_key] = FileSnapshot(stat.st_size, stat.st_mtime, stable_count)
 
         # 手动扫描：文件创建至少 2 秒
-        # 自动扫描：需要连续 2 次以上稳定
+        # 自动扫描：需要连续 stable_count 次以上稳定（默认 2，同步盘建议 ≥3）
         age_seconds = datetime.now(timezone.utc).timestamp() - stat.st_mtime
-        if not force_stable and stable_count < 2:
+        threshold = get_settings().watch_stable_count
+        if not force_stable and stable_count < threshold:
             return None
         if force_stable and age_seconds < 2:
             return None

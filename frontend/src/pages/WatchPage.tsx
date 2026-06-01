@@ -60,6 +60,17 @@ export function WatchPage({
             />
           </label>
         </div>
+        <label>
+          <span>稳定检测次数</span>
+          <input
+            type="number"
+            min={2}
+            max={20}
+            value={watchDraft.stable_count}
+            onChange={(event) => setWatchDraft((draft) => ({ ...draft, stable_count: Number(event.target.value) }))}
+          />
+          <span className="muted">文件大小和修改时间连续 N 次扫描不变后才处理（同步盘建议 ≥3）</span>
+        </label>
         <div className="button-row">
           <button className="primary" disabled={settingsBusy} onClick={saveWatchSettings}>保存监控</button>
           <button className="secondary" disabled={settingsBusy || !watchSettings?.watch_dir} onClick={runWatchScan}>

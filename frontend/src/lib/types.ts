@@ -159,15 +159,44 @@ export interface WatchSettings {
   watch_dir: string;
   recursive: boolean;
   interval_seconds: number;
+  stable_count: number;
   exists: boolean;
 }
 
 /** 存储目录设置 - GET/PUT /api/settings/storage */
 export interface StorageSettings {
+  data_dir: string;
   transcript_dir: string;
   summary_dir: string;
   transcript_exists: boolean;
   summary_exists: boolean;
+}
+
+/** 数据迁移预览 - GET /api/settings/storage/migration-preview */
+export interface StorageMigrationPreview {
+  old_dir: string;
+  new_dir: string;
+  old: StorageDirStats;
+  new: StorageDirStats;
+}
+
+export interface StorageDirStats {
+  exists: boolean;
+  app_db_size_mb: number;
+  recording_count: number;
+  recording_size_mb: number;
+  normalized_count: number;
+  normalized_size_mb: number;
+  recordings?: number;
+  tasks?: number;
+  transcript_segments?: number;
+  summaries?: number;
+}
+
+/** 数据迁移结果 - POST /api/settings/storage/migrate */
+export interface StorageMigrationResult {
+  ok: boolean;
+  results: string[];
 }
 
 // =====================================================================

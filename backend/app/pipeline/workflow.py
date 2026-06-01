@@ -10,9 +10,13 @@ Workflow orchestration - 任务执行流水线
 """
 
 import json
+import os
+import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from sqlalchemy import update as sa_update
 from sqlmodel import Session, delete, select
 
 from app.db.database import engine
@@ -21,6 +25,7 @@ from app.config import get_settings
 from app.services.asr_service import ASRService
 from app.services.audio_service import AudioService
 from app.services.export_names import summary_filename
+from app.services.file_service import ensure_hydrated
 from app.services.runtime_log import get_logger
 from app.services.summary_service import SUMMARY_TEMPLATES, SummaryService
 
@@ -57,6 +62,30 @@ def _update_task(session: Session, task: Task, **values: object) -> None:
     session.add(task)
     session.commit()
     session.refresh(task)
+
+
+def _claim_task(session: Session, task_id: str, progress: int = 10) -> bool:
+    """原子认领任务：仅当状态为 queued 时才更新为 running。
+
+    使用条件 UPDATE 保证跨终端互斥，防止多台机器同时执行同一任务。
+    返回 True 表示本机成功认领，False 表示已被其他终端抢先。
+
+    Args:
+        session: 数据库会话
+        task_id: 任务 ID
+        progress: 认领后设置的初始进度
+
+    Returns:
+        认领成功返回 True
+    """
+    result = session.execute(
+        sa_update(Task)
+        .where(Task.id == task_id)
+        .where(Task.status == "queued")
+        .values(status="running", progress=progress, started_at=_now(), updated_at=_now())
+    )
+    session.commit()
+    return result.rowcount > 0
 
 
 def _is_cancelled(session: Session, task: Task) -> bool:
@@ -203,12 +232,10 @@ def run_transcription_task(task_id: str) -> None:
             return
 
         try:
-            # 阶段 0: 取消预检
-            if _is_cancelled(session, task):
-                _finish_cancelled(session, task, recording)
+            # 阶段 0: 原子认领任务（条件 UPDATE，防止多终端抢跑）
+            if not _claim_task(session, task_id, progress=10):
                 return
             # 阶段 1: 开始
-            _update_task(session, task, status="running", progress=10, started_at=_now())
             _run_async_task(_emit_task_started(task_id, recording.id, "Task started"))
             recording.status = "normalizing"
             recording.updated_at = _now()
@@ -218,6 +245,7 @@ def run_transcription_task(task_id: str) -> None:
             # 阶段 2: 音频归一化
             audio_service = AudioService()
             source = Path(recording.original_path)
+            ensure_hydrated(source, label=f"audio:{recording.filename}")
             normalized = audio_service.normalize(source, recording.id)
             duration = audio_service.duration_seconds(normalized)
             if _is_cancelled(session, task):
@@ -240,7 +268,7 @@ def run_transcription_task(task_id: str) -> None:
                 return
             _run_async_task(_emit_task_progress(task_id, recording.id, 70, "Transcribing"))
 
-            # 阶段 4: 保存结果（先清旧数据，再批量写入）
+            # 阶段 4: 保存结果到数据库（先清旧数据，再批量写入）
             session.exec(delete(TranscriptSegment).where(TranscriptSegment.recording_id == recording.id))
             for index, segment in enumerate(segments):
                 session.add(
@@ -253,25 +281,32 @@ def run_transcription_task(task_id: str) -> None:
                         sequence=index,
                     )
                 )
-            # 备份到 JSON 文件
-            transcript_path = get_settings().resolved_transcript_dir / f"{recording.id}.json"
-            transcript_path.write_text(
-                json.dumps([segment.__dict__ for segment in segments], ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
 
-            # 阶段 5: 完成
+            # 阶段 5: 完成（先提交数据库，确保数据安全）
             recording.status = "transcribed"
             recording.updated_at = _now()
             session.add(recording)
             session.commit()
+
+            # JSON 备份是非关键操作，失败不影响转录结果
+            transcript_path = get_settings().resolved_transcript_dir / f"{recording.id}.json"
+            backup_ok = False
+            try:
+                _atomic_write_text(
+                    transcript_path,
+                    json.dumps([segment.__dict__ for segment in segments], ensure_ascii=False, indent=2),
+                )
+                backup_ok = True
+            except Exception as e:
+                logger.warning("Failed to write transcript JSON backup (non-fatal): %s", e)
+
             _run_async_task(_emit_task_completed(task_id, recording.id, str(transcript_path)))
             _update_task(
                 session,
                 task,
                 status="completed",
                 progress=100,
-                result_path=str(transcript_path),
+                result_path=str(transcript_path) if backup_ok else None,
                 completed_at=_now(),
             )
         except Exception as exc:
@@ -317,12 +352,10 @@ def run_summary_task(task_id: str, mode: str = "summary") -> None:
             return
 
         try:
-            # 阶段 0: 取消预检
-            if _is_cancelled(session, task):
-                _finish_cancelled(session, task, recording)
+            # 阶段 0: 原子认领任务（条件 UPDATE，防止多终端抢跑）
+            if not _claim_task(session, task_id, progress=20):
                 return
             # 阶段 1: 开始
-            _update_task(session, task, status="running", progress=20, started_at=_now())
             _run_async_task(_emit_task_started(task_id, recording.id, f"Summary task started ({mode})"))
 
             # 阶段 2: 读取并拼接转写文本
@@ -355,7 +388,7 @@ def run_summary_task(task_id: str, mode: str = "summary") -> None:
                 "md",
                 recording.id,
             )
-            summary_path.write_text(content, encoding="utf-8")
+            _atomic_write_text(summary_path, content)
 
             # 阶段 5: 完成
             recording.status = "completed"
@@ -381,3 +414,31 @@ def run_summary_task(task_id: str, mode: str = "summary") -> None:
                 completed_at=_now(),
             )
             _run_async_task(_emit_task_failed(task_id, recording.id if recording else "", str(exc)))
+
+
+def _atomic_write_text(path: Path, content: str, max_retries: int = 8, retry_delay: float = 0.75) -> None:
+    """通过隐藏临时文件 + 原子重命名方式写入文本，避免同步盘文件锁定问题。
+
+    使用 .tmp.{uuid} 隐藏文件名写入同目录，减少同步盘锁定的概率。
+    写入和重命名都有自动重试机制。
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(f".__tmp_{uuid.uuid4().hex[:8]}__")
+    for attempt in range(max_retries):
+        try:
+            tmp_path.write_text(content, encoding="utf-8")
+            break
+        except OSError:
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+            else:
+                raise
+    for attempt in range(max_retries):
+        try:
+            os.replace(str(tmp_path), str(path))
+            return
+        except OSError:
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+            else:
+                raise

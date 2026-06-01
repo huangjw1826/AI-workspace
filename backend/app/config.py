@@ -92,6 +92,7 @@ class Settings(BaseSettings):
     watch_dir: str = ""
     watch_recursive: bool = True
     watch_interval_seconds: int = 10
+    watch_stable_count: int = 2
 
     # --- 安全配置 ---
     api_token: str = ""

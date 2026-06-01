@@ -1,19 +1,29 @@
 from collections.abc import Generator
 from pathlib import Path
 
-from sqlalchemy import inspect, text
+from sqlalchemy import event, inspect, text
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.config import get_settings
 from app.models.api_token import ApiToken
-from app.services.file_service import content_hash
+from app.services.file_service import content_hash, ensure_hydrated
 
 settings = get_settings()
 sqlite_path = settings.resolved_data_dir / "app.db"
+if sqlite_path.exists():
+    ensure_hydrated(sqlite_path, label="app.db")
 engine = create_engine(
     f"sqlite:///{sqlite_path.as_posix()}",
     connect_args={"check_same_thread": False},
 )
+
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragmas(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=30000")
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
 
 
 def init_db() -> None:
