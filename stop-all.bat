@@ -1,11 +1,11 @@
 @echo off
 REM AI Recorder - Stop All Services
-REM 停止后端服务、Cloudflare 隧道和相关进程
+REM Stop backend, Cloudflare tunnel and related processes
 REM
-REM 停止策略（按安全级别递减）：
-REM 1. 先停止 cloudflared（远程访问隧道）
-REM 2. 按端口号 8000 精确停止后端进程（避免误杀其他端口）
-REM 3. 根据进程名清理可能的 uvicorn/python 残留
+REM Stop strategy (by safety level):
+REM 1. Stop cloudflared first (remote access tunnel)
+REM 2. Stop backend by port 8000 (precise, avoid killing other ports)
+REM 3. Clean up any remaining uvicorn/python processes
 
 setlocal
 
@@ -14,7 +14,7 @@ echo   AI Recorder - Stop All Services
 echo ============================================
 echo.
 
-REM 步骤 1: 停止 Cloudflare 隧道
+REM Step 1: Stop Cloudflare tunnel
 echo [1/3] Stopping Cloudflare Tunnel...
 taskkill /F /T /IM cloudflared.exe 2>NUL
 if errorlevel 1 (
@@ -24,8 +24,8 @@ if errorlevel 1 (
 )
 echo.
 
-REM 步骤 2: 严格按端口 8000 停止进程（使用正则匹配精确端口）
-REM 注意：使用 /R /C:":8000 " 避免误杀 80000/80001 等进程
+REM Step 2: Stop backend process by port 8000 (precise regex match)
+REM Note: /R /C:":8000 " avoids killing processes on port 80000/80001
 echo [2/3] Stopping Backend (port 8000)...
 set "FOUND="
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr /R /C:":8000 " ^| findstr "LISTENING"') do (
@@ -40,7 +40,7 @@ if not defined FOUND (
 )
 echo.
 
-REM 步骤 3: 兜底清理 - 根据进程名清理可能的残留进程
+REM Step 3: Cleanup remaining uvicorn/python processes
 echo [3/3] Cleaning up uvicorn/python processes...
 taskkill /F /IM uvicorn.exe /T 2>NUL
 taskkill /F /IM cloudflared.exe /T 2>NUL
