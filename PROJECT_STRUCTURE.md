@@ -407,11 +407,12 @@ data/
 | `start-all.ps1` | PowerShell | 一键启动：后端 (uvicorn) + 无头隐藏窗口 |
 | `stop-all.ps1` | PowerShell | 停止所有服务，清理 PID 文件 |
 | `check.ps1` | PowerShell | 环境检查：依赖/端口/配置/服务状态 |
+| `setup.ps1` | PowerShell | 一键安装：venv、pip、npm、前端构建 |
 | `package-portable.ps1` | PowerShell | 打包便携版（含 miniconda + node） |
-| `start_all.bat` | Batch | 简化启动 (调用 start-all.ps1) |
-| `start_backend.bat` | Batch | 仅启动后端 |
-| `start_tunnel.bat` | Batch | 仅启动 Cloudflare 隧道 |
-| `stop_all.bat` | Batch | 简化停止 (调用 stop-all.ps1) |
+| `start-all.bat` | Batch | 一键启动：前端构建 + 后端 + Cloudflare 隧道 |
+| `start-backend.bat` | Batch | 仅启动后端 FastAPI 服务 |
+| `start-tunnel.bat` | Batch | 仅启动 Cloudflare 隧道 |
+| `stop-all.bat` | Batch | 停止所有服务（cloudflared + 后端 + uvicorn） |
 | `backend/start.ps1` | PowerShell | 后端独立启动 (开发用) |
 | `frontend/build.ps1` | PowerShell | 前端构建 (npm run build) |
 

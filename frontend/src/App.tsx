@@ -206,76 +206,96 @@ export default function App() {
       const idToRefresh = selectedId === undefined ? selected?.recording.id : selectedId;
 
       // Health: always independent — must not be blocked by other API failures
-      try {
-        setHealth(await getHealth());
-      } catch (healthErr) {
-        console.warn("Health check failed:", healthErr);
-      }
+      const healthPromise = getHealth()
+        .then((data) => {
+          setHealth(data);
+        })
+        .catch((healthErr) => {
+          console.warn("Health check failed:", healthErr);
+        });
 
       // Recordings
-      try {
-        const searchResult = await listRecordings(appliedFilters.query, appliedFilters.tag);
-        setRecordings(searchResult.recordings);
-        setSearchMatchPreviews(searchResult.match_previews);
-      } catch (recErr) {
-        console.warn("List recordings failed:", recErr);
-      }
+      const recordingsPromise = listRecordings(appliedFilters.query, appliedFilters.tag)
+        .then((searchResult) => {
+          setRecordings(searchResult.recordings);
+          setSearchMatchPreviews(searchResult.match_previews);
+        })
+        .catch((recErr) => {
+          console.warn("List recordings failed:", recErr);
+        });
 
       // LLM settings
-      try {
-        const llmResult = await getLlmSettings();
-        setLlmSettings(llmResult);
-        setLlmDraft((draft) => ({
-          ...draft,
-          provider: llmResult.provider,
-          base_url: llmResult.base_url,
-          model: llmResult.model,
-          mimo_thinking: llmResult.mimo_thinking,
-          max_completion_tokens: llmResult.max_completion_tokens,
-          temperature: llmResult.temperature,
-          top_p: llmResult.top_p,
-        }));
-      } catch (llmErr) {
-        console.warn("Get LLM settings failed:", llmErr);
-      }
+      const llmPromise = getLlmSettings()
+        .then((llmResult) => {
+          setLlmSettings(llmResult);
+          setLlmDraft((draft) => ({
+            ...draft,
+            provider: llmResult.provider,
+            base_url: llmResult.base_url,
+            model: llmResult.model,
+            mimo_thinking: llmResult.mimo_thinking,
+            max_completion_tokens: llmResult.max_completion_tokens,
+            temperature: llmResult.temperature,
+            top_p: llmResult.top_p,
+          }));
+        })
+        .catch((llmErr) => {
+          console.warn("Get LLM settings failed:", llmErr);
+        });
 
       // Watch settings
-      try {
-        const watchResult = await getWatchSettings();
-        setWatchSettings(watchResult);
-        setWatchDraft(watchResult);
-      } catch (watchErr) {
-        console.warn("Get watch settings failed:", watchErr);
-      }
+      const watchPromise = getWatchSettings()
+        .then((watchResult) => {
+          setWatchSettings(watchResult);
+          setWatchDraft(watchResult);
+        })
+        .catch((watchErr) => {
+          console.warn("Get watch settings failed:", watchErr);
+        });
 
       // Watch events
-      try {
-        setWatchEvents(await listWatchEvents());
-      } catch (eventsErr) {
-        console.warn("List watch events failed:", eventsErr);
-      }
+      const eventsPromise = listWatchEvents()
+        .then((events) => {
+          setWatchEvents(events);
+        })
+        .catch((eventsErr) => {
+          console.warn("List watch events failed:", eventsErr);
+        });
 
       // Summary templates
-      try {
-        const templatesResult = await listSummaryTemplates();
-        setSummaryTemplates(templatesResult);
-        setSummaryMode((current) => current || templatesResult[0]?.id || "structured_summary");
-      } catch (tmplErr) {
-        console.warn("List summary templates failed:", tmplErr);
-      }
+      const templatesPromise = listSummaryTemplates()
+        .then((templatesResult) => {
+          setSummaryTemplates(templatesResult);
+          setSummaryMode((current) => current || templatesResult[0]?.id || "structured_summary");
+        })
+        .catch((tmplErr) => {
+          console.warn("List summary templates failed:", tmplErr);
+        });
 
       // Storage settings
-      try {
-        const storageResult = await getStorageSettings();
-        setStorageSettings(storageResult);
-        setStorageDraft({
-          data_dir: storageResult.data_dir,
-          transcript_dir: storageResult.transcript_dir,
-          summary_dir: storageResult.summary_dir,
+      const storagePromise = getStorageSettings()
+        .then((storageResult) => {
+          setStorageSettings(storageResult);
+          setStorageDraft({
+            data_dir: storageResult.data_dir,
+            transcript_dir: storageResult.transcript_dir,
+            summary_dir: storageResult.summary_dir,
+          });
+        })
+        .catch((storageErr) => {
+          console.warn("Get storage settings failed:", storageErr);
         });
-      } catch (storageErr) {
-        console.warn("Get storage settings failed:", storageErr);
-      }
+
+      // 并行等待所有独立请求完成
+      await Promise.all([
+        healthPromise,
+        recordingsPromise,
+        llmPromise,
+        watchPromise,
+        eventsPromise,
+        templatesPromise,
+        storagePromise,
+      ]);
 
       if (idToRefresh) {
         try {

@@ -21,42 +21,57 @@ import type {
   WatchEvent,
   WatchSettings
 } from "./types";
+import { getApiBaseUrl, sanitizeFilename } from "./utils";
 
-/** 自动检测 API 基础地址 */
-function defaultApiBaseUrl() {
-  const configured = import.meta.env.VITE_API_BASE_URL;
-  if (configured) return configured.replace(/\/+$/, "");
-  if (typeof window !== "undefined" && ["5173", "5174"].includes(window.location.port)) {
-    return "http://127.0.0.1:8000";
-  }
-  return typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:8000";
-}
-
-const API_BASE_URL = defaultApiBaseUrl();
+const API_BASE_URL = getApiBaseUrl();
 
 /** 拼接完整 API URL */
 export function apiUrl(path: string) {
-  return `${API_BASE_URL}${path}`;
+  if (!path.startsWith("/")) {
+    throw new Error(`Invalid API path: ${path}`);
+  }
+  const sanitizedPath = path.replace(/\/{2,}/g, "/").replace(/\/\.\.(\/|$)/g, "/");
+  return `${API_BASE_URL}${sanitizedPath}`;
 }
 
 /** 通用请求封装：自动 JSON 解析和错误处理 */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  const response = await fetch(apiUrl(path), { ...init, headers });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `Request failed: ${response.status}`);
+  try {
+    const response = await fetch(apiUrl(path), { ...init, headers });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Request failed: ${response.status}`);
+    }
+    return response.json() as Promise<T>;
+  } catch (error) {
+    if (error instanceof TypeError && (error.message.includes("Failed to fetch") || error.message.includes("NetworkError"))) {
+      throw new Error("网络错误：无法连接到服务器，请检查后端服务是否运行");
+    }
+    throw error;
   }
-  return response.json() as Promise<T>;
 }
 
 /** 从 Content-Disposition 响应头解析文件名（支持 UTF-8 和 ASCII 编码） */
 function filenameFromDisposition(disposition: string | null, fallback: string) {
   if (!disposition) return fallback;
+
+  let filename = fallback;
   const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-  if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1].replace(/"/g, ""));
-  const asciiMatch = disposition.match(/filename="?([^";]+)"?/i);
-  return asciiMatch?.[1] ?? fallback;
+  if (utf8Match?.[1]) {
+    try {
+      filename = decodeURIComponent(utf8Match[1].replace(/"/g, ""));
+    } catch {
+      filename = utf8Match[1].replace(/"/g, "");
+    }
+  } else {
+    const asciiMatch = disposition.match(/filename="?([^";]+)"?/i);
+    if (asciiMatch?.[1]) {
+      filename = asciiMatch[1];
+    }
+  }
+
+  return sanitizeFilename(filename) || fallback;
 }
 
 /**
@@ -308,8 +323,12 @@ export function deleteSummary(id: string) {
 // 文件夹选择（PC 端原生对话框）
 // =====================================================================
 
+/** 文件夹选择（PC 端原生对话框） */
+
 export interface PickFolderResult {
   path: string;
+  cancelled?: boolean;
+  error?: boolean;
 }
 
 /** 弹出 Windows 原生文件夹选择对话框 */

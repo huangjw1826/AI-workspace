@@ -539,6 +539,13 @@ button {
   white-space: nowrap;
 }
 
+.folder-picker-error {
+  color: #d4380d;
+  font-size: 12px;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
 .searchbox input {
   flex: 1;
   min-width: 0;

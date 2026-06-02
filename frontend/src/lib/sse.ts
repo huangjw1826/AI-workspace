@@ -125,7 +125,7 @@ class SSEClient {
   }
 
   private scheduleReconnect(): void {
-    if (this.reconnectTimer) {
+    if (this.reconnectTimer || this.isConnecting) {
       return;
     }
 
@@ -137,9 +137,7 @@ class SSEClient {
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.reconnectAttempts++;
-      this.eventSource?.close();
-      this.eventSource = null;
-      this.isConnecting = false;
+      this.disconnect();
       this.connect(this.currentUrl);
     }, delay);
   }
@@ -167,14 +165,7 @@ class SSEClient {
 let globalClient: SSEClient | null = null;
 const listeners = new Set<(event: TaskEvent) => void>();
 
-function getApiBaseUrl() {
-  const configured = import.meta.env.VITE_API_BASE_URL;
-  if (configured) return configured.replace(/\/+$/, "");
-  if (typeof window !== "undefined" && ["5173", "5174"].includes(window.location.port)) {
-    return "http://127.0.0.1:8000";
-  }
-  return typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:8000";
-}
+import { getApiBaseUrl } from "./utils";
 
 export function getSSEUrl() {
   return `${getApiBaseUrl()}/api/events`;
