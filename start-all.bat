@@ -87,7 +87,7 @@ echo ============================================
 echo   Services Started!
 echo   Backend : http://127.0.0.1:8000
 echo   Frontend: http://127.0.0.1:8000 (SPA mounted by backend)
-echo   Tunnel  : https://weizziwong.top
+echo   Tunnel  : (configured via start-tunnel.bat)
 echo ============================================
 echo.
 echo   Run stop-all.bat to stop all services.

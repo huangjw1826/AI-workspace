@@ -402,14 +402,21 @@ ffmpeg -y -i input.mp3 -ac 1 -ar 16000 output.wav
 | 方法 | 路径 | 描述 |
 |------|------|------|
 | GET | `/api/tasks/{id}` | 获取任务状态 |
-| DELETE | `/api/tasks/{id}` | 取消任务 |
+| POST | `/api/tasks/{id}/cancel` | 取消任务 |
 
 ### 5.5 设置接口
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
-| GET | `/api/settings` | 获取设置 |
-| POST | `/api/settings` | 更新设置 |
+| GET | `/api/settings/llm` | 获取 LLM 设置 |
+| PUT | `/api/settings/llm` | 更新 LLM 设置 |
+| POST | `/api/settings/llm/test` | 测试 LLM 连通性 |
+| GET | `/api/settings/watch` | 获取目录监控设置 |
+| PUT | `/api/settings/watch` | 更新目录监控设置 |
+| GET | `/api/settings/storage` | 获取存储设置 |
+| PUT | `/api/settings/storage` | 更新存储设置 |
+| GET | `/api/settings/storage/migration-preview` | 预览数据迁移 |
+| POST | `/api/settings/storage/migrate` | 执行数据迁移 |
 
 ### 5.6 目录监控接口
 
@@ -422,7 +429,7 @@ ffmpeg -y -i input.mp3 -ac 1 -ar 16000 output.wav
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
-| GET | `/api/health` | 健康检查 |
+| GET | `/health` | 健康检查（系统状态、资源使用、隧道状态） |
 
 ---
 
@@ -595,17 +602,19 @@ data/
 
 | 表名 | 说明 |
 |------|------|
-| `recording` | 录音记录 |
-| `task` | 任务记录 |
-| `transcript_segment` | 转写片段 |
-| `summary` | 摘要记录 |
+| `recording` | 录音记录（核心实体） |
+| `task` | 任务记录（转写/摘要） |
+| `transcript_segment` | 转写片段（含时间轴和说话人） |
+| `summary` | 摘要记录（支持多模板） |
 | `watch_event` | 目录监控事件 |
+| `apitoken` | API 认证 Token（多设备支持） |
+| `accesslog` | 远程访问日志（审计追踪） |
 
 ---
 
 ## 10. 安全注意事项
 
-1. **API Token**: 配置 `API_TOKEN` 后，所有请求需要在 Header 中携带 `Authorization: Bearer <token>`
+1. **API Token**: 远程访问需在 Header 中携带 `X-API-Token: <token>`（本地回环请求免检）
 2. **敏感配置**: `backend/.env` 包含 API Key，不应提交到版本控制
 3. **文件路径安全**: 使用 `resolve()` 和 `relative_to()` 防止路径遍历攻击
 4. **CORS**: 默认只允许本地开发地址，生产环境应配置正确的 CORS 来源

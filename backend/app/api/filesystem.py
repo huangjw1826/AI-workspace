@@ -1,8 +1,17 @@
-"""Native Windows folder picker support.
+"""
+文件系统 API 模块 - Windows 原生文件夹选择器
 
-Uses the Shell.Application COM object to show a native folder picker
-dialog. This approach works even when the calling process has no
-visible window (e.g. started with -WindowStyle Hidden).
+使用 Shell.Application COM 对象弹出原生文件夹选择对话框。
+此方式相比传统的 FolderBrowserDialog 的优点是：
+即使调用进程没有可见窗口（如 -WindowStyle Hidden 启动），
+Shell.Application 也能正常工作。
+
+工作原理：
+1. 前端请求 /api/pick-folder
+2. 后端在临时文件中写入 PowerShell 脚本路径
+3. PowerShell 使用 COM 对象弹出原生对话框
+4. 用户选择后，路径写入临时结果文件
+5. 后端读取结果返回给前端
 """
 
 import asyncio
@@ -20,10 +29,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["filesystem"])
 
-# PowerShell script that uses Shell.Application COM to show a folder
-# browser dialog. Unlike FolderBrowserDialog, Shell.Application
-# does NOT require a parent form/window, so it works from hidden processes.
-# 注释使用英文避免 PowerShell 5 解析多字节字符时的潜在问题
+# PowerShell 脚本：使用 Shell.Application COM 对象弹出原生文件夹浏览器对话框。
+# 与 FolderBrowserDialog 不同，Shell.Application 不需要父窗口/表单，
+# 因此即使从隐藏进程也能正常工作。
+# 注意：使用 ASCII-safe 注释避免 PowerShell 5 解析多字节字符时的潜在问题
 PICK_FOLDER_PS = r"""
 $shell = New-Object -ComObject Shell.Application
 $folder = $shell.BrowseForFolder(0, 'Select Folder', 0x00000010, 0)
@@ -37,10 +46,14 @@ if ($folder) {
 
 
 async def _run_powershell_dialog(result_path: str, timeout: float = 120.0) -> None:
-    """在后台线程中运行 PowerShell COM 对话框，避免阻塞事件循环。
+    """在后台线程中运行 PowerShell COM 对话框。
 
     使用 asyncio.to_thread 将同步的 subprocess.run 放到线程池中执行，
-    这样 FastAPI 事件循环可以继续处理其他请求。
+    这样 FastAPI 事件循环不会阻塞，可以继续处理其他请求。
+
+    Args:
+        result_path: PowerShell 写入用户选择结果的临时文件路径
+        timeout: 超时时间（秒），默认 120 秒
     """
     env = os.environ.copy()
     env["RESULT_FILE"] = result_path
@@ -82,11 +95,25 @@ async def _run_powershell_dialog(result_path: str, timeout: float = 120.0) -> No
 
 @router.post("/api/pick-folder")
 async def pick_folder(request: Request) -> dict[str, object]:
-    """Show a native Windows folder picker dialog and return the selected path."""
+    """弹出 Windows 原生文件夹选择对话框并返回用户选择的路径。
+
+    安全限制：仅限本地请求（is_local_request），防止远程用户触发
+    本地对话框。用户取消选择时返回 cancelled=True。
+
+    Args:
+        request: FastAPI 请求对象（用于判断本地/远程）
+
+    Returns:
+        dict: {
+            "path": str - 选择的文件夹路径，取消或出错时为空字符串
+            "cancelled": bool - 用户是否取消选择
+            "error": bool - 是否发生错误
+        }
+    """
     if not is_local_request(request):
         raise HTTPException(
             status_code=403,
-            detail="Folder picker is only available on the local PC.",
+            detail="文件夹选择器仅限本地使用",
         )
 
     fd, result_path = tempfile.mkstemp(suffix=".txt", prefix="ai_recorder_pick_")

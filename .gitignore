@@ -33,6 +33,7 @@ logs/*
 # Tools
 .tools/
 .tools/*.zip
+.trae/
 .workbuddy/
 release/
 /nul

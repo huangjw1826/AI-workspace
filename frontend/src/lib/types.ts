@@ -247,3 +247,44 @@ export interface SearchResult {
   /** 搜索命中预览，key 为录音 ID，value 为匹配片段数组 */
   match_previews: Record<string, string[]>;
 }
+
+// =====================================================================
+// API Token 管理
+// =====================================================================
+
+/** API Token - GET /api/tokens 响应项 */
+export interface ApiToken {
+  id: string;
+  name: string;
+  device_info?: string | null;
+  is_active: boolean;
+  created_at: string;
+  last_used_at?: string | null;
+  /** 创建时返回完整 Token，列表查看时已掩码 */
+  token?: string | null;
+}
+
+/** 创建 Token 请求体 */
+export interface ApiTokenCreate {
+  name: string;
+  device_info?: string | null;
+}
+
+/** 更新 Token 请求体 */
+export interface ApiTokenUpdate {
+  name?: string | null;
+  is_active?: boolean | null;
+}
+
+/** 访问日志记录 */
+export interface AccessLogEntry {
+  id: string;
+  token_id?: string | null;
+  device_name?: string | null;
+  method: string;
+  path: string;
+  status_code: number;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  created_at: string;
+}

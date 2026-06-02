@@ -6,6 +6,8 @@
  */
 
 import type {
+  ApiToken,
+  ApiTokenUpdate,
   HealthStatus,
   LlmConnectivityResult,
   LlmSettings,
@@ -334,4 +336,38 @@ export interface PickFolderResult {
 /** 弹出 Windows 原生文件夹选择对话框 */
 export function pickFolder(): Promise<PickFolderResult> {
   return request<PickFolderResult>("/api/pick-folder", { method: "POST" });
+}
+
+// =====================================================================
+// API Token 管理
+// =====================================================================
+
+/** 创建新 Token（返回完整 Token 仅一次） */
+export function createApiToken(data: { name: string; device_info?: string }) {
+  return request<ApiToken>("/api/tokens", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+/** 列出所有 Token（已掩码） */
+export function listApiTokens() {
+  return request<ApiToken[]>("/api/tokens");
+}
+
+/** 更新 Token（名称/启用状态） */
+export function updateApiToken(id: string, data: ApiTokenUpdate) {
+  return request<ApiToken>(`/api/tokens/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+/** 删除/撤销 Token */
+export function deleteApiToken(id: string) {
+  return request<{ message: string }>(`/api/tokens/${id}`, {
+    method: "DELETE",
+  });
 }

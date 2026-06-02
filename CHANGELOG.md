@@ -1,5 +1,58 @@
 # AI Recorder 更改日志
 
+## 2026-06-02 代码全面审查与文档一致性更新 (v3.1.0)
+
+本次对项目进行系统性全面审查，覆盖后端、前端、Android 端代码注释完善，文档一致性校验，以及脚本优化。
+
+### Changed
+- **后端代码注释全面完善** (18+ 文件)：
+  - `api/auth.py` — 完整模块/类/函数中文 docstring，认证流程阶段级注释
+  - `api/tokens.py` — 模块级说明文档 + 所有端点完整中文 Args/Returns/Raises
+  - `api/events.py` — SSE 事件推送架构说明
+  - `api/tasks.py` — 任务管理模块完整文档，含状态机说明
+  - `api/transcribe.py` — 转写任务流程阶段级注释
+  - `api/watch.py` — 目录监控手动扫描和事件查询详细文档
+  - `api/filesystem.py` — Windows 原生文件夹选择器工作原理说明
+  - `api/summary.py` — 摘要生成/导出/删除完整流程注释
+  - `api/settings.py` — LLM/监控/存储设置完整说明
+  - `api/health.py` — 健康检查端点详细注释
+  - `api/recordings.py` — 录音管理完整 CRUD 注释
+  - `middleware/security_headers.py` — 安全头作用和配置说明
+  - `middleware/exception_handler.py` — Trace ID 机制和异常分类说明
+  - `models/task.py` — 任务状态机完整说明
+  - `models/summary.py` — 多模板摘要支持说明
+  - `models/transcript.py` — 转写片段校对功能说明
+
+- **前端代码注释完善** (3+ 文件)：
+  - `lib/sse.ts` — SSE 客户端完整 JSDoc + 类/方法/全局单例说明
+  - `lib/api.ts` — 全部 25+ API 函数更新 JSDoc 注释
+  - `lib/utils.ts` — 工具函数完整文档
+
+- **文档一致性修复**：
+  - `CODE_WIKI.md` — 修复任务取消 API 路径（`DELETE /api/tasks/{id}` → `POST /api/tasks/{id}/cancel`）
+  - `CODE_WIKI.md` — 修复健康检查 API 路径（`/api/health` → `/health`）
+  - `CODE_WIKI.md` — 更新安全注意事项（`Authorization: Bearer` → `X-API-Token` 头）
+  - `CODE_WIKI.md` — 更新设置接口为实际的路由（`/api/settings` → `/api/settings/llm` 等 9 个端点）
+  - `CODE_WIKI.md` — 补充缺失的数据库表（apitoken、accesslog）
+  - `README.md` — 版本号更新为 v3.1.0
+
+- **启动脚本注释优化**：
+  - `start-all.bat` — 移除硬编码隧道域名
+  - `start-backend.bat` — 完整中文注释说明启动流程
+  - `stop-all.bat` — 完整停止策略说明
+
+### Fixed
+- `CODE_WIKI.md` 中 4 处 API 文档与实际代码不匹配的问题
+- `start-all.bat` 硬编码外网域名的问题
+
+### Verified
+- 后端代码注释一致性审查通过
+- 前端代码注释一致性审查通过
+- 文档与代码 API 定义一致性审查通过
+- 所有启动/停止脚本语法验证通过
+
+---
+
 ## 2026-05-30 项目全面梳理与规范化处理完成 (v3.0.3)
 
 本次完成项目全面梳理与规范化处理的收尾工作，项目文档和代码注释体系已完善。

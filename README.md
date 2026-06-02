@@ -2,7 +2,7 @@
 
 > 面向 Windows 的本地录音整理工作台 — 离线转写 + LLM 智能摘要 + Android 远程访问
 
-**当前版本：v3.0.1** | [变更日志](./CHANGELOG.md) | [项目结构](./PROJECT_STRUCTURE.md) | [代码维基](./CODE_WIKI.md)
+**当前版本：v3.1.0** | [变更日志](./CHANGELOG.md) | [项目结构](./PROJECT_STRUCTURE.md) | [代码维基](./CODE_WIKI.md)
 
 ---
 

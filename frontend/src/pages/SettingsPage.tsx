@@ -1,8 +1,10 @@
 import React from "react";
-import { HardDrive, Settings } from "lucide-react";
+import { Check, CheckCircle, Copy, HardDrive, Key, Settings, Trash2, XCircle } from "lucide-react";
 import { FolderPicker } from "../components/ui/FolderPicker";
 import { SettingsSection } from "../components/ui/SettingsSection";
+import { createApiToken, deleteApiToken, listApiTokens, updateApiToken } from "../lib/api";
 import type {
+  ApiToken,
   LlmConnectivityResult,
   LlmSettings,
   LlmSettingsUpdate,
@@ -149,6 +151,186 @@ export function SettingsPage({
         </div>
         {llmTest && <p className={llmTest.ok ? "ok" : "bad"}>{llmTest.message}</p>}
       </SettingsSection>
+
+      <ApiTokenSection />
     </section>
+  );
+}
+
+function ApiTokenSection() {
+  const [tokens, setTokens] = React.useState<ApiToken[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [newTokenName, setNewTokenName] = React.useState("");
+  const [creating, setCreating] = React.useState(false);
+  const [createdTokenData, setCreatedTokenData] = React.useState<{ token: string } | null>(null);
+  const [copied, setCopied] = React.useState(false);
+
+  React.useEffect(() => {
+    loadTokens().catch(() => {});
+  }, []);
+
+  async function loadTokens() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await listApiTokens();
+      setTokens(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "加载 Token 列表失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCreate() {
+    const name = newTokenName.trim();
+    if (!name || creating) return;
+    setCreating(true);
+    setError(null);
+    try {
+      const result = await createApiToken({ name, device_info: JSON.stringify({}) });
+      setCreatedTokenData({ token: result.token ?? "" });
+      setNewTokenName("");
+      await loadTokens();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "创建 Token 失败");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleToggleActive(token: ApiToken) {
+    const original = tokens.find((t) => t.id === token.id);
+    setTokens((prev) =>
+      prev.map((t) => (t.id === token.id ? { ...t, is_active: !t.is_active } : t))
+    );
+    try {
+      await updateApiToken(token.id, { is_active: !token.is_active });
+    } catch {
+      if (original) setTokens((prev) => prev.map((t) => (t.id === token.id ? original : t)));
+    }
+  }
+
+  async function handleDelete(tokenId: string) {
+    if (!window.confirm("确定要删除此 Token 吗？使用此 Token 的设备将无法再访问。")) return;
+    const original = tokens.find((t) => t.id === tokenId);
+    setTokens((prev) => prev.filter((t) => t.id !== tokenId));
+    try {
+      await deleteApiToken(tokenId);
+    } catch {
+      if (original) setTokens((prev) => [...prev, original]);
+    }
+  }
+
+  function handleCopyToken(token: string) {
+    navigator.clipboard.writeText(token).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      setError("复制 Token 失败，请手动复制");
+    });
+  }
+
+  return (
+    <SettingsSection title="远程访问 Token" icon={<Key size={17} />}>
+      {createdTokenData ? (
+        <div className="token-created">
+          <p className="ok">Token 创建成功！请立即复制保存，此 Token 不会再次显示。</p>
+          <div className="token-created-value">
+            <code>{createdTokenData.token}</code>
+            <button
+              className="icon-button"
+              onClick={() => handleCopyToken(createdTokenData.token)}
+              title="复制 Token"
+            >
+              {copied ? <Check size={16} /> : <Copy size={16} />}
+            </button>
+          </div>
+          <div className="button-row">
+            <button className="primary" onClick={() => setCreatedTokenData(null)}>
+              我已保存
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <label>
+            <span>设备名称</span>
+            <div className="token-create-row">
+              <input
+                value={newTokenName}
+                onChange={(e) => setNewTokenName(e.target.value)}
+                placeholder="例如：我的 Android 手机"
+                disabled={creating}
+                onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
+              />
+              <button
+                className="primary"
+                disabled={creating || !newTokenName.trim()}
+                onClick={handleCreate}
+              >
+                {creating ? "创建中..." : "创建 Token"}
+              </button>
+            </div>
+          </label>
+        </>
+      )}
+
+      {loading && <p className="muted">加载中...</p>}
+
+      {error && <p className="bad">{error}</p>}
+
+      {!loading && !error && tokens.length === 0 && (
+        <p className="muted">还没有创建 Token，请在上方创建。</p>
+      )}
+
+      {tokens.length > 0 && (
+        <div className="token-list">
+          {tokens.map((token) => (
+            <div key={token.id} className={`token-item ${token.is_active ? "" : "token-item-disabled"}`}>
+              <div className="token-item-info">
+                <span className="token-item-name">{token.name}</span>
+                <span className={`token-item-status ${token.is_active ? "status-active" : "status-disabled"}`}>
+                  {token.is_active ? "活跃" : "已禁用"}
+                </span>
+              </div>
+              <div className="token-item-meta">
+                <code className="token-item-token">{token.token ?? ""}</code>
+                <span className="muted">
+                  {token.last_used_at
+                    ? `最近使用: ${new Date(token.last_used_at).toLocaleDateString("zh-CN")}`
+                    : "从未使用"}
+                </span>
+              </div>
+              <div className="token-item-actions">
+                <button
+                  className="icon-button"
+                  onClick={() => handleToggleActive(token)}
+                  title={token.is_active ? "禁用" : "启用"}
+                >
+                  {token.is_active ? (
+                    <CheckCircle size={16} className="text-success" />
+                  ) : (
+                    <XCircle size={16} className="text-muted" />
+                  )}
+                </button>
+                <button
+                  className="icon-button"
+                  onClick={() => handleDelete(token.id)}
+                  title="删除"
+                >
+                  <Trash2 size={16} className="text-danger" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="muted" style={{ fontSize: "12px" }}>
+        Token 用于 Android 客户端远程访问后端 API。每个设备应使用独立的 Token。
+      </p>
+    </SettingsSection>
   );
 }
