@@ -322,6 +322,48 @@ def update_storage_settings(payload: StorageSettingsUpdate) -> StorageSettingsRe
     return _storage_settings_payload()
 
 
+class ASRSettingsRead(BaseModel):
+    device: str
+    model: str
+    enable_diarization: bool
+    max_concurrency: int
+
+
+class ASRSettingsUpdate(BaseModel):
+    device: str = Field(default="auto", pattern="^(auto|cpu|cuda)$")
+    enable_diarization: bool = False
+    max_concurrency: int = Field(default=1, ge=1, le=4)
+
+
+def _asr_settings_payload() -> ASRSettingsRead:
+    settings = get_settings()
+    return ASRSettingsRead(
+        device=settings.asr_device,
+        model=settings.asr_model,
+        enable_diarization=settings.asr_enable_diarization,
+        max_concurrency=settings.asr_max_concurrency,
+    )
+
+
+@router.get("/asr")
+def get_asr_settings() -> ASRSettingsRead:
+    return _asr_settings_payload()
+
+
+@router.put("/asr")
+def update_asr_settings(payload: ASRSettingsUpdate) -> ASRSettingsRead:
+    _write_env(
+        Path(".env"),
+        {
+            "ASR_DEVICE": payload.device,
+            "ASR_ENABLE_DIARIZATION": "true" if payload.enable_diarization else "false",
+            "ASR_MAX_CONCURRENCY": str(payload.max_concurrency),
+        },
+    )
+    get_settings.cache_clear()
+    return _asr_settings_payload()
+
+
 class StorageMigrateRequest(BaseModel):
     data_dir: str
 

@@ -23,6 +23,7 @@ from app.config import get_settings
 from app.db.database import engine
 from app.models import Recording, WatchEvent
 from app.services.file_service import audio_suffix, content_hash, is_supported_audio, file_creation_time
+from app.services.audio_service import AudioService
 
 SYNC_IGNORE_SUFFIXES = {".tmp", ".temp", ".part", ".crdownload", ".download"}
 SYNC_IGNORE_PREFIXES = ("~$",)
@@ -38,6 +39,7 @@ def _sync_recording_info(recording: Recording, path: Path, stat, digest: str) ->
     recording.file_size_bytes = stat.st_size
     recording.source_mtime = stat.st_mtime
     recording.content_hash = digest
+    recording.duration_seconds = AudioService().duration_seconds(path)
     recording.created_at = file_creation_time(path)
     recording.updated_at = datetime.now(timezone.utc)
 
@@ -282,6 +284,7 @@ class DirectoryWatcher:
 
             # 创建新录音记录
             suffix = audio_suffix(path)
+            duration = AudioService().duration_seconds(path)
             recording = Recording(
                 filename=path.name,
                 original_path=str(path),
@@ -291,6 +294,7 @@ class DirectoryWatcher:
                 source_mtime=stat.st_mtime,
                 source_type="watch",
                 source_path=str(path),
+                duration_seconds=duration,
                 created_at=file_creation_time(path),
             )
             session.add(recording)

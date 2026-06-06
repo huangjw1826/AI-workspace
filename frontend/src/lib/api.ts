@@ -8,6 +8,8 @@
 import type {
   ApiToken,
   ApiTokenUpdate,
+  AsrSettings,
+  AsrSettingsUpdate,
   HealthStatus,
   LlmConnectivityResult,
   LlmSettings,
@@ -174,6 +176,24 @@ export function listSummaryTemplates() {
 // 存储设置
 // =====================================================================
 
+/** 获取 ASR 设置 */
+export function getAsrSettings() {
+  return request<AsrSettings>("/api/settings/asr");
+}
+
+/** 更新 ASR 设置 */
+export function updateAsrSettings(settings: AsrSettingsUpdate) {
+  return request<AsrSettings>("/api/settings/asr", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings)
+  });
+}
+
+// =====================================================================
+// 存储设置
+// =====================================================================
+
 /** 获取存储目录设置 */
 export function getStorageSettings() {
   return request<StorageSettings>("/api/settings/storage");
@@ -246,6 +266,13 @@ export function deleteRecordingsBatch(recordingIds: string[]) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ recording_ids: recordingIds })
   });
+}
+
+/** 重新同步所有录音的文件信息（从磁盘读取最新元数据） */
+export function resyncRecordings() {
+  return request<{ total: number; updated: number; missing: number; errors: number; relocated: number; details: string[] }>(
+    "/api/recordings/resync", { method: "POST" }
+  );
 }
 
 /** 更新录音标签 */

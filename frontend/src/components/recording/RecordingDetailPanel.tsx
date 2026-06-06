@@ -144,29 +144,27 @@ export function RecordingDetailPanel({
     <aside className="detail-panel">
       {/* Fixed Top Region */}
       <div className="detail-top">
+        {/* Compact hero: icon + filename/meta + status inline */}
         <header className="detail-hero">
           <div className="detail-hero-icon">
-            <Sparkles size={17} strokeWidth={2} />
+            <FileAudio size={14} strokeWidth={2.5} />
           </div>
-          <div>
-            <h2>{selected.recording.filename}</h2>
-            <p>
-              {formatSize(selected.recording.file_size_bytes)} ·{" "}
-              {formatDuration(selected.recording.duration_seconds)}
-            </p>
+          <div className="detail-hero-info">
+            <h2 title={selected.recording.filename}>{selected.recording.filename}</h2>
+            <span className="detail-hero-meta">
+              {formatSize(selected.recording.file_size_bytes)} · {formatDuration(selected.recording.duration_seconds)}
+            </span>
+            <StatusBadge status={selected.recording.status} />
+            <span className="detail-meta-tag">
+              {selected.recording.source_type === "watch" ? "监控" : "上传"}
+            </span>
           </div>
         </header>
 
-        <div className="detail-meta">
-          <StatusBadge status={selected.recording.status} />
-          <span className="detail-meta-tag">
-            {selected.recording.source_type === "watch" ? "目录监控" : "上传"}
-          </span>
-        </div>
-
+        {/* Action buttons */}
         <div className="detail-actions">
           <button className="btn btn-secondary btn-sm" disabled={busy} onClick={runTranscription}>
-            {busy ? <Loader2 className="spin" size={14} /> : <FileAudio size={14} />}
+            {busy ? <Loader2 className="spin" size={13} /> : <FileAudio size={13} />}
             转写
           </button>
           <button
@@ -174,30 +172,24 @@ export function RecordingDetailPanel({
             disabled={busy || selected.segments.length === 0}
             onClick={() => setSummaryPickerOpen(true)}
           >
-            <Sparkles size={14} />
-            生成摘要
+            <Sparkles size={13} />
+            摘要（{activeTemplate?.name ?? "结构化"}）
           </button>
         </div>
 
-        <p className="detail-summary-mode">
-          当前模板：{activeTemplate?.name ?? "结构化摘要"}
-        </p>
-
+        {/* Audio + waveform in compact grid */}
         <section className="audio-section" aria-label="音频播放">
           <div className="audio-header">
-            <span>音频播放</span>
-            <strong>
-              {formatDuration(currentTime)} / {formatDuration(selected.recording.duration_seconds)}
-            </strong>
+            <span>音频</span>
+            <strong>{formatDuration(currentTime)} / {formatDuration(selected.recording.duration_seconds)}</strong>
           </div>
           <div className="waveform">
-            {Array.from({ length: 40 }, (_, i) => (
+            {Array.from({ length: 36 }, (_, i) => (
               <div
                 key={i}
                 className={`wave-bar${currentTime > 0 ? " active" : ""}`}
                 style={{
                   animationDelay: `${(i * 0.07).toFixed(2)}s`,
-                  height: `${4 + Math.random() * 12}px`,
                 }}
               />
             ))}
@@ -234,20 +226,34 @@ export function RecordingDetailPanel({
                 </button>
               </div>
               <div className="template-list">
-                {summaryTemplates.map((t) => (
-                  <button
-                    key={t.id}
-                    className={`template-option${t.id === summaryMode ? " active" : ""}`}
-                    onClick={() => {
-                      setSummaryMode(t.id);
-                      setSummaryPickerOpen(false);
-                      runSummary(t.id);
-                    }}
-                  >
-                    <strong>{t.name}</strong>
-                    <span>{t.description}</span>
-                  </button>
-                ))}
+                {(() => {
+                  const work = summaryTemplates.filter((t) => t.category === "work");
+                  const life = summaryTemplates.filter((t) => t.category === "life");
+                  const general = summaryTemplates.filter((t) => !t.category || t.category === "general");
+                  const groups: { label: string; items: typeof summaryTemplates }[] = [];
+                  if (work.length) groups.push({ label: "💼 工作场景", items: work });
+                  if (life.length) groups.push({ label: "🏠 生活场景", items: life });
+                  if (general.length) groups.push({ label: "📋 通用", items: general });
+                  return groups.map((group) => (
+                    <div key={group.label} className="template-group">
+                      <div className="template-group-label">{group.label}</div>
+                      {group.items.map((t) => (
+                        <button
+                          key={t.id}
+                          className={`template-option${t.id === summaryMode ? " active" : ""}`}
+                          onClick={() => {
+                            setSummaryMode(t.id);
+                            setSummaryPickerOpen(false);
+                            runSummary(t.id);
+                          }}
+                        >
+                          <strong>{t.name}</strong>
+                          <span>{t.description}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ));
+                })()}
               </div>
             </div>
           </div>

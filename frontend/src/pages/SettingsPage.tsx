@@ -5,6 +5,7 @@ import {
   Copy,
   HardDrive,
   Key,
+  Mic,
   Settings,
   Trash2,
   XCircle,
@@ -19,6 +20,8 @@ import {
 } from "../lib/api";
 import type {
   ApiToken,
+  AsrSettings,
+  AsrSettingsUpdate,
   LlmConnectivityResult,
   LlmSettings,
   LlmSettingsUpdate,
@@ -38,9 +41,13 @@ export function SettingsPage({
   setLlmDraft,
   llmSettings,
   llmTest,
+  asrDraft,
+  setAsrDraft,
+  asrSettings,
   settingsBusy,
   saveStorageSettings,
   saveLlmSettings,
+  saveAsrSettings,
   checkLlmConnectivity,
   applyProviderDefaults,
 }: {
@@ -51,9 +58,13 @@ export function SettingsPage({
   setLlmDraft: React.Dispatch<React.SetStateAction<LlmSettingsUpdate>>;
   llmSettings: LlmSettings | null;
   llmTest: LlmConnectivityResult | null;
+  asrDraft: AsrSettingsUpdate;
+  setAsrDraft: React.Dispatch<React.SetStateAction<AsrSettingsUpdate>>;
+  asrSettings: AsrSettings | null;
   settingsBusy: boolean;
   saveStorageSettings: () => void;
   saveLlmSettings: () => void;
+  saveAsrSettings: () => void;
   checkLlmConnectivity: () => void;
   applyProviderDefaults: (provider: LlmSettingsUpdate["provider"]) => void;
 }) {
@@ -111,6 +122,42 @@ export function SettingsPage({
           转写目录：{storageSettings?.transcript_exists ? "可用" : "待检查"} ·
           摘要目录：{storageSettings?.summary_exists ? "可用" : "待检查"}
         </p>
+      </SettingsSection>
+
+      <SettingsSection title="语音转写 (ASR)" icon={<Mic size={17} />}>
+        <label>
+          <span>说话人分离（说话人识别）</span>
+          <label className="toggle-row">
+            <input
+              type="checkbox"
+              className="toggle-input"
+              checked={asrDraft.enable_diarization ?? false}
+              onChange={(e) =>
+                setAsrDraft((d) => ({
+                  ...d,
+                  enable_diarization: e.target.checked,
+                }))
+              }
+              disabled={settingsBusy}
+            />
+            <span className="toggle-switch" />
+            <span className="toggle-label-text">
+              {asrDraft.enable_diarization ? "已启用" : "已禁用"}
+            </span>
+          </label>
+          <span className="muted">
+            启用后将使用 cam++ 模型自动识别不同说话人。启用后转写速度会降低约 30%，且首次启用需下载模型（约 80MB）。
+          </span>
+        </label>
+        <div className="button-row">
+          <button
+            className="btn btn-primary"
+            disabled={settingsBusy}
+            onClick={saveAsrSettings}
+          >
+            保存 ASR
+          </button>
+        </div>
       </SettingsSection>
 
       <SettingsSection title="LLM 设置" icon={<Settings size={17} />}>

@@ -5,15 +5,16 @@ import { ToastStack } from "./components/feedback/ToastStack";
 import { NavBar } from "./components/layout/NavBar";
 import {
   cancelTask, deleteRecording, deleteRecordingsBatch, deleteSummary,
-  downloadFile, getHealth, getLlmSettings, getRecording,
+  downloadFile, getAsrSettings, getHealth, getLlmSettings, getRecording,
   getStorageSettings, getWatchSettings, listRecordings, listSummaryTemplates,
-  listWatchEvents, migrateStorage, previewStorageMigration, scanWatchDirectory,
+  listWatchEvents, migrateStorage, previewStorageMigration, resyncRecordings,
+  scanWatchDirectory,
   startSummary, startSummaryBatch, startTranscription, startTranscriptionBatch,
-  testLlmConnectivity, updateLlmSettings, updateRecordingTags,
+  testLlmConnectivity, updateAsrSettings, updateLlmSettings, updateRecordingTags,
   updateTranscriptSegment, updateStorageSettings, updateWatchSettings, uploadRecording,
 } from "./lib/api";
 import type {
-  ExportFormat, HealthStatus, LlmConnectivityResult, LlmSettings,
+  AsrSettings, AsrSettingsUpdate, ExportFormat, HealthStatus, LlmConnectivityResult, LlmSettings,
   LlmSettingsUpdate, Recording, RecordingDetail, StorageMigrationPreview,
   StorageSettings, SummaryTemplate, Task, WatchEvent, WatchSettings,
 } from "./lib/types";
@@ -92,6 +93,10 @@ export default function App() {
   const [settingsBusy, setSettingsBusy] = React.useState(false);
   const [llmTest, setLlmTest] = React.useState<LlmConnectivityResult | null>(null);
   const [confirmDialog, setConfirmDialog] = React.useState<ConfirmDialogState | null>(null);
+  const [asrSettings, setAsrSettings] = React.useState<AsrSettings | null>(null);
+  const [asrDraft, setAsrDraft] = React.useState<AsrSettingsUpdate>({
+    enable_diarization: false, max_concurrency: 1,
+  });
 
   // ---- settings drafts ----
   const [llmDraft, setLlmDraft] = React.useState<LlmSettingsUpdate>({
@@ -140,6 +145,7 @@ export default function App() {
         listWatchEvents().then(setWatchEvents).catch((e) => console.warn("List watch events failed:", e)),
         listSummaryTemplates().then((r) => { setSummaryTemplates(r); setSummaryMode((c) => c || r[0]?.id || "structured_summary"); }).catch((e) => console.warn("List summary templates failed:", e)),
         getStorageSettings().then((r) => { setStorageSettings(r); setStorageDraft({ data_dir: r.data_dir, transcript_dir: r.transcript_dir, summary_dir: r.summary_dir }); }).catch((e) => console.warn("Get storage settings failed:", e)),
+        getAsrSettings().then((r) => { setAsrSettings(r); setAsrDraft({ enable_diarization: r.enable_diarization, max_concurrency: r.max_concurrency }); }).catch((e) => console.warn("Get ASR settings failed:", e)),
       ]);
 
       if (idToRefresh) {
@@ -222,6 +228,19 @@ export default function App() {
       event.target.value = "";
     }
   };
+
+  const handleResync = () => run(async () => {
+    const result = await resyncRecordings();
+    await refresh();
+    const detailMsg = [
+      result.total > 0 ? `共 ${result.total} 条` : "",
+      result.updated > 0 ? `已更新 ${result.updated} 条` : "",
+      ((result as any).relocated ?? 0) > 0 ? `重定位 ${(result as any).relocated} 条` : "",
+      result.missing > 0 ? `缺失 ${result.missing} 条` : "",
+      result.errors > 0 ? `错误 ${result.errors} 条` : "",
+    ].filter(Boolean).join("，");
+    showToast(`文件信息同步完成：${detailMsg}`, result.errors > 0 ? "error" : "success");
+  });
 
   const selectRecording = async (id: string) => {
     const detail = await getRecording(id);
@@ -347,6 +366,15 @@ export default function App() {
     } finally { setSettingsBusy(false); }
   }, "监控设置已保存");
 
+  const saveAsrSettings = () => run(async () => {
+    setSettingsBusy(true);
+    try {
+      const updated = await updateAsrSettings(asrDraft);
+      setAsrSettings(updated);
+      setAsrDraft({ enable_diarization: updated.enable_diarization, max_concurrency: updated.max_concurrency });
+    } finally { setSettingsBusy(false); }
+  }, "ASR 设置已保存");
+
   const doSaveStorageSettings = async () => {
     const updated = await updateStorageSettings(storageDraft);
     setStorageSettings(updated);
@@ -470,6 +498,7 @@ export default function App() {
         onViewChange={go}
         onUpload={handleUpload}
         onRefresh={() => refresh().catch((err) => setError(err.message))}
+        onResync={handleResync}
       />
 
       <section className="workspace">
@@ -543,8 +572,11 @@ export default function App() {
               storageSettings={storageSettings}
               llmDraft={llmDraft} setLlmDraft={setLlmDraft}
               llmSettings={llmSettings} llmTest={llmTest}
+              asrDraft={asrDraft} setAsrDraft={setAsrDraft}
+              asrSettings={asrSettings}
               settingsBusy={settingsBusy}
               saveStorageSettings={saveStorageSettings} saveLlmSettings={saveLlmSettings}
+              saveAsrSettings={saveAsrSettings}
               checkLlmConnectivity={checkLlmConnectivity} applyProviderDefaults={applyProviderDefaults}
             />
           )}

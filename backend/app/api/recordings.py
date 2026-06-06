@@ -17,6 +17,7 @@ from app.db.database import get_session
 from app.models import Recording, Summary, Task, TranscriptSegment
 from app.services.export_names import safe_filename_part
 from app.services.file_service import content_hash, file_creation_time
+from app.services.audio_service import AudioService
 
 router = APIRouter(prefix="/api/recordings", tags=["recordings"])
 
@@ -213,10 +214,14 @@ async def upload_recording(
     target = _unique_path(library_dir, file.filename or f"upload.{suffix}", suffix)
     shutil.move(str(temp_path), str(target))
 
+    # Extract audio duration at ingest time
+    duration = AudioService().duration_seconds(target)
+
     recording = Recording(
         filename=file.filename or "recording", original_path=str(target), format=suffix,
         content_hash=digest, file_size_bytes=bytes_written, source_type="upload",
         source_path=str(target), source_mtime=target.stat().st_mtime,
+        duration_seconds=duration,
         created_at=file_creation_time(target),
     )
     session.add(recording)
@@ -329,6 +334,122 @@ def _delete_one(recording_id: str, session: Session) -> None:
 
     session.delete(recording)
     session.commit()
+
+
+class ResyncResult(BaseModel):
+    total: int = 0
+    updated: int = 0
+    missing: int = 0
+    errors: int = 0
+    relocated: int = 0
+    details: list[str] = Field(default_factory=list)
+
+
+def _find_file_by_hash(parent_dirs: list[Path], stored_hash: str | None) -> Path | None:
+    """Search candidate directories for a file matching the given content_hash.
+
+    Scans each directory recursively (files only) and computes SHA-256 until a match
+    is found. Returns the first matching path, or None.
+    """
+    if not stored_hash:
+        return None
+    for d in parent_dirs:
+        if not d.exists() or not d.is_dir():
+            continue
+        for f in d.rglob("*"):  # noqa: F821
+            if not f.is_file():
+                continue
+            try:
+                if content_hash(f) == stored_hash:
+                    return f
+            except Exception:
+                continue
+    return None
+
+
+@router.post("/resync")
+def resync_all_recordings(
+    session: Session = Depends(get_session),
+) -> ResyncResult:
+    """Re-sync all recordings' file metadata from disk.
+
+    For each recording, tries to locate the original file (handles renames):
+    1. Try the stored original_path first
+    2. If not found, scan parent directories and watch_dir for matching content_hash
+
+    Updates: filename, format, file_size_bytes, source_mtime, content_hash,
+             duration_seconds, original_path (if relocated).
+    """
+    settings = get_settings()
+    recordings = session.exec(select(Recording)).all()
+    result = ResyncResult(total=len(recordings))
+    audio = AudioService()
+
+    # Collect candidate search directories: watch_dir + all parent dirs of original_paths
+    candidate_dirs: list[Path] = []
+    watch_dir = settings.resolved_watch_dir
+    if watch_dir and watch_dir.is_dir():
+        candidate_dirs.append(watch_dir)
+    for rec in recordings:
+        if rec.original_path:
+            parent = Path(rec.original_path).parent
+            if parent.exists() and parent.is_dir() and parent not in candidate_dirs:
+                candidate_dirs.append(parent)
+
+    for rec in recordings:
+        if not rec.original_path:
+            result.missing += 1
+            result.details.append(f"❌ {rec.filename}: 缺少原始路径")
+            continue
+
+        path = Path(rec.original_path)
+        relocated = False
+
+        # -- Step 1: try stored path --
+        if not path.exists() or not path.is_file():
+            # -- Step 2: search candidate dirs by content_hash --
+            found = _find_file_by_hash(candidate_dirs, rec.content_hash)
+            if found is not None:
+                path = found
+                relocated = True
+            else:
+                result.missing += 1
+                result.details.append(f"❌ {rec.filename}: 文件不存在且无法定位 (曾位于 {rec.original_path})")
+                continue
+
+        # -- Step 3: sync metadata --
+        try:
+            stat = path.stat()
+            digest = content_hash(path)
+            duration = audio.duration_seconds(path)
+
+            rec.filename = path.name
+            rec.format = path.suffix.lower().lstrip(".")
+            rec.file_size_bytes = stat.st_size
+            rec.source_mtime = stat.st_mtime
+            rec.content_hash = digest
+            rec.duration_seconds = duration
+            rec.original_path = str(path)
+            rec.source_path = str(path)
+            rec.updated_at = datetime.now(timezone.utc)
+            rec.created_at = file_creation_time(path)
+
+            session.add(rec)
+            result.updated += 1
+            if relocated:
+                result.relocated += 1
+                result.details.append(f"🔁 {rec.filename}: 已重定位 → {path.name}")
+            elif rec.filename != path.name:
+                result.details.append(f"✅ {rec.filename}: 已同步 (原名: {path.name})")
+            else:
+                dur_str = f"{duration:.0f}s" if duration else "未知"
+                result.details.append(f"✅ {rec.filename}: 已同步 · 时长 {dur_str}")
+        except Exception as exc:
+            result.errors += 1
+            result.details.append(f"⚠️ {rec.filename}: {exc}")
+
+    session.commit()
+    return result
 
 
 @router.get("/{recording_id}")

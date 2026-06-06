@@ -37,7 +37,13 @@ export function ConfirmDialog({
           <button
             className={state.tone === "danger" ? "btn btn-danger" : "btn btn-primary"}
             disabled={busy}
-            onClick={() => void state.onConfirm()}
+            onClick={async () => {
+              try {
+                await state.onConfirm();
+              } finally {
+                onCancel();
+              }
+            }}
           >
             {state.confirmLabel ?? "确认"}
           </button>

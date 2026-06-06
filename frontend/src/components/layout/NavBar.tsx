@@ -4,6 +4,7 @@ import {
   Database,
   FileAudio,
   FolderSearch,
+  FolderSync,
   RefreshCw,
   Settings,
   Upload,
@@ -25,6 +26,7 @@ export function NavBar({
   onViewChange,
   onUpload,
   onRefresh,
+  onResync,
 }: {
   view: View;
   health: HealthStatus | null;
@@ -32,6 +34,7 @@ export function NavBar({
   onViewChange: (view: View) => void;
   onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onRefresh: () => void;
+  onResync: () => void;
 }) {
   return (
     <header className="nav">
@@ -74,6 +77,10 @@ export function NavBar({
 
         <button className="btn btn-icon" onClick={onRefresh} title="刷新数据">
           <RefreshCw size={16} />
+        </button>
+
+        <button className="btn btn-icon" onClick={onResync} disabled={busy} title="重新同步所有文件信息（时长、大小等）">
+          <FolderSync size={16} />
         </button>
       </div>
     </header>

@@ -150,6 +150,25 @@ export interface LlmConnectivityResult {
 }
 
 // =====================================================================
+// ASR 设置相关
+// =====================================================================
+
+/** ASR 当前设置 - GET/PUT /api/settings/asr */
+export interface AsrSettings {
+  device: string;
+  model: string;
+  enable_diarization: boolean;
+  max_concurrency: number;
+}
+
+/** ASR 设置更新请求 */
+export interface AsrSettingsUpdate {
+  device?: string;
+  enable_diarization?: boolean;
+  max_concurrency?: number;
+}
+
+// =====================================================================
 // 设置相关
 // =====================================================================
 
@@ -228,6 +247,7 @@ export interface SummaryTemplate {
   id: string;
   name: string;
   description: string;
+  category?: string;
 }
 
 // =====================================================================

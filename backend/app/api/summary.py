@@ -29,6 +29,7 @@ def list_summary_templates() -> list[dict[str, str]]:
             "id": str(template["id"]),
             "name": str(template["name"]),
             "description": str(template["description"]),
+            "category": str(template.get("category", "general")),
         }
         for template in SUMMARY_TEMPLATES.values()
     ]
