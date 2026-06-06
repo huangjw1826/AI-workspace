@@ -3,7 +3,9 @@ Recording CRUD — list, upload, get, delete, batch-delete, tags, segment editin
 """
 
 import json
+import os
 import shutil
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -111,7 +113,27 @@ def _write_transcript_json(session: Session, recording_id: str) -> Path:
         .order_by(TranscriptSegment.sequence)
     ).all()
     path = get_settings().resolved_transcript_dir / f"{recording_id}.json"
-    path.write_text(json.dumps(_segments_payload(segments), ensure_ascii=False, indent=2), encoding="utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = json.dumps(_segments_payload(segments), ensure_ascii=False, indent=2)
+
+    # Atomic write with retries — handles cloud sync file locks
+    tmp = path.with_suffix(f".__tmp_{uuid4().hex[:8]}__")
+    for attempt in range(8):
+        try:
+            tmp.write_text(content, encoding="utf-8")
+            break
+        except OSError:
+            if attempt == 7:
+                raise
+            time.sleep(0.75)
+    for attempt in range(8):
+        try:
+            os.replace(str(tmp), str(path))
+            return path
+        except OSError:
+            if attempt == 7:
+                raise
+            time.sleep(0.75)
     return path
 
 

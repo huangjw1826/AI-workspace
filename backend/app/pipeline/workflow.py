@@ -44,6 +44,23 @@ async def _get_sse_service():
 # 数据库/任务辅助
 # =============================================================================
 
+def _write_transcript_json(session: Session, recording_id: str) -> None:
+    """Write transcript segments to JSON file in the configured transcript directory."""
+    import json as _json
+    segments = session.exec(
+        select(TranscriptSegment)
+        .where(TranscriptSegment.recording_id == recording_id)
+        .order_by(TranscriptSegment.sequence)
+    ).all()
+    payload = [
+        {"start_time": s.start_time, "end_time": s.end_time, "speaker": s.speaker,
+         "text": s.text, "sequence": s.sequence}
+        for s in segments
+    ]
+    path = get_settings().resolved_transcript_dir / f"{recording_id}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_write(path, _json.dumps(payload, ensure_ascii=False, indent=2))
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -246,6 +263,9 @@ def run_transcription_task(task_id: str) -> None:
         recording.updated_at = _now()
         session.add(recording)
         session.commit()
+
+        # Write transcript JSON file to configured transcript directory
+        _write_transcript_json(session, recording.id)
 
     _execute_pipeline(task_id, "transcription", _execute, initial_progress=10)
 

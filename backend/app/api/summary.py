@@ -104,17 +104,32 @@ def _delete_summary_files(summary: Summary, recording: Recording | None) -> None
     title = recording.filename if recording else summary.recording_id
     template = SUMMARY_TEMPLATES.get(summary.mode)
     template_name = str(template["name"]) if template else summary.mode
-    candidates = {
-        settings.resolved_summary_dir / summary_filename(title, template_name, summary.created_at, "md", summary.recording_id),
-        settings.resolved_summary_dir / summary_filename(title, template_name, summary.created_at, "md"),
-        settings.resolved_summary_dir / f"{summary.recording_id}-{summary.mode}.md",
-        settings.resolved_data_dir / "summaries" / f"{summary.recording_id}-{summary.mode}.md",
-    }
+
+    # Direct candidates — exact paths based on naming conventions
+    candidates: set[Path] = set()
+    for unique_suffix in (summary.recording_id, None):
+        name = summary_filename(title, template_name, summary.created_at, "md", unique_suffix)
+        candidates.add(settings.resolved_summary_dir / name)
+    # Fallback: recording_id-based pattern (ignores template name changes)
+    candidates.add(settings.resolved_summary_dir / f"{summary.recording_id}-{summary.mode}.md")
+    candidates.add(settings.resolved_data_dir / "summaries" / f"{summary.recording_id}-{summary.mode}.md")
+
     for path in candidates:
         try:
             path.unlink(missing_ok=True)
         except Exception:
             pass
+
+    # Glob fallback: search for any file containing this summary's recording_id
+    # This handles template name changes, emoji stripping, and other renames
+    for search_dir in (settings.resolved_summary_dir, settings.resolved_data_dir / "summaries"):
+        if not search_dir.exists():
+            continue
+        for f in search_dir.glob(f"*{summary.recording_id}*"):
+            try:
+                f.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 @export_router.get("/{summary_id}/export")
