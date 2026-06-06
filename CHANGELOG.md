@@ -1,5 +1,56 @@
 # AI Recorder 更改日志
 
+## 2026-06-06 前端全面视觉重构 (v3.2.0)
+
+本次对前端进行全面视觉重构，采用全新「松石绿 Moss & Mineral」设计语言，打造简约、饱满、高交互性的用户体验。
+
+### Changed
+- **设计系统重构**：
+  - 新建 `styles/tokens.css` — 完整 CSS 自定义属性体系（色彩、字体、间距、阴影、圆角、动画曲线）
+  - 新建 `styles/global.css` — 全局样式 + 所有页面/组件样式（替代旧的 1700 行单文件 `styles.css`）
+  - 新建 `styles/animations.css` — 关键帧动画 + 交错入场 + 动画工具类
+  - 删除 `styles.css`
+
+- **配色方案变更**：
+  - 主色调从蓝色（#1677ff）更换为松石绿（#3d8b5f）
+  - 背景从纯白更换为冷雾绿灰（#f4f6f3）
+  - 文字从纯黑更换为深松石墨（#1c2722）
+  - 边框从暖灰更换为冷灰绿（#e1e6df）
+
+- **字体升级**：
+  - 标题字体：DM Serif Display（Google Fonts）
+  - 等宽字体：JetBrains Mono（Google Fonts）
+  - 正文字体：系统 CJK 字体栈（PingFang SC / Microsoft YaHei）
+
+- **布局重构**：
+  - 新建 `PageTransition` 组件 — 页面切换淡入动画
+  - 新建 `TopBar` 组件 — 统一页面标题栏
+  - 录音列表从 8 列 Grid 表格改为弹性双行布局（不需横向滚动）
+  - 导航栏改为毛玻璃效果 + 下划线激活指示器
+
+- **组件全面重写**（视觉层面，逻辑保留）：
+  - 全部 4 个页面重写：LibraryPage、WatchPage、SettingsPage、HealthPage
+  - 全部 10 个共享组件重写：NavBar、RecordingDetailPanel、MetricCard、SummaryCard、StatusBadge、ExportButtons、FolderPicker、InfoCard、SettingsSection、MarkdownView
+  - 反馈组件重写：ConfirmDialog（动画背景遮罩）、ToastStack（错峰入场动画）
+
+- **交互增强**：
+  - 交错入场动画（stagger）：指标卡片、列表项依次淡入上浮
+  - 音频波形动画：详情面板 CSS 纯动画波形条
+  - 脉冲状态指示器：导航栏健康状态绿点呼吸动画
+  - 卡片 hover 上浮 + 阴影加深
+  - 复选框勾选缩放反馈
+  - 批量操作栏滑入动画
+  - 模态框缩放弹出 + 背景淡入
+  - Toast 滑入 + 错峰堆叠
+  - 进度条流光动画
+
+### Technical
+- 零新增依赖，完全基于现有 tech stack（React 19 + Vite + Zustand + TanStack Query + Lucide React）
+- 所有 API 调用、状态管理、TypeScript 类型定义保持不变
+- 构建产物：CSS 33KB / JS 320KB（gzip 后分别 7KB / 100KB）
+
+---
+
 ## 2026-06-02 代码全面审查与文档一致性更新 (v3.1.0)
 
 本次对项目进行系统性全面审查，覆盖后端、前端、Android 端代码注释完善，文档一致性校验，以及脚本优化。

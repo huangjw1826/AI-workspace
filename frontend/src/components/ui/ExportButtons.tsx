@@ -1,4 +1,3 @@
-import { Download } from "lucide-react";
 import type { ExportFormat } from "../../lib/types";
 
 const LABELS: Record<ExportFormat, string> = {
@@ -6,12 +5,12 @@ const LABELS: Record<ExportFormat, string> = {
   txt: "TXT",
   json: "JSON",
   srt: "SRT",
-  docx: "DOCX"
+  docx: "DOCX",
 };
 
 export function ExportButtons({
   onExport,
-  formats = ["md", "txt"]
+  formats = ["md", "txt"],
 }: {
   onExport: (format: ExportFormat) => void;
   formats?: ExportFormat[];
@@ -19,7 +18,9 @@ export function ExportButtons({
   return (
     <div className="export-buttons">
       {formats.map((format) => (
-        <button key={format} onClick={() => onExport(format)}><Download size={14} /> {LABELS[format]}</button>
+        <button key={format} className="export-btn" onClick={() => onExport(format)}>
+          {LABELS[format]}
+        </button>
       ))}
     </div>
   );

@@ -20,7 +20,11 @@ export function MarkdownView({ content }: { content: string }) {
         index += 1;
       }
       index += 1;
-      blocks.push(<pre key={blocks.length} className="markdown-code"><code>{code.join("\n")}</code></pre>);
+      blocks.push(
+        <pre key={blocks.length} className="markdown-code">
+          <code>{code.join("\n")}</code>
+        </pre>
+      );
       continue;
     }
 
@@ -28,26 +32,38 @@ export function MarkdownView({ content }: { content: string }) {
     if (heading) {
       const level = Math.min(heading[1].length, 4);
       const Tag = `h${level}` as keyof React.JSX.IntrinsicElements;
-      blocks.push(<Tag key={blocks.length}>{renderInlineMarkdown(heading[2])}</Tag>);
+      blocks.push(
+        <Tag key={blocks.length}>{renderInline(heading[2])}</Tag>
+      );
       index += 1;
       continue;
     }
 
-    if (isMarkdownTable(lines, index)) {
-      const rows: string[][] = [];
-      const header = splitMarkdownTableRow(lines[index]);
+    if (isTable(lines, index)) {
+      const header = splitRow(lines[index]);
       index += 2;
+      const rows: string[][] = [];
       while (index < lines.length && lines[index].includes("|") && lines[index].trim()) {
-        rows.push(splitMarkdownTableRow(lines[index]));
+        rows.push(splitRow(lines[index]));
         index += 1;
       }
       blocks.push(
         <div key={blocks.length} className="markdown-table-wrap">
           <table>
-            <thead><tr>{header.map((cell, cellIndex) => <th key={cellIndex}>{renderInlineMarkdown(cell)}</th>)}</tr></thead>
+            <thead>
+              <tr>
+                {header.map((cell, ci) => (
+                  <th key={ci}>{renderInline(cell)}</th>
+                ))}
+              </tr>
+            </thead>
             <tbody>
-              {rows.map((row, rowIndex) => (
-                <tr key={rowIndex}>{header.map((_, cellIndex) => <td key={cellIndex}>{renderInlineMarkdown(row[cellIndex] ?? "")}</td>)}</tr>
+              {rows.map((row, ri) => (
+                <tr key={ri}>
+                  {header.map((_, ci) => (
+                    <td key={ci}>{renderInline(row[ci] ?? "")}</td>
+                  ))}
+                </tr>
               ))}
             </tbody>
           </table>
@@ -56,57 +72,73 @@ export function MarkdownView({ content }: { content: string }) {
       continue;
     }
 
-    const unordered = line.match(/^\s*[-*]\s+(.+)$/);
-    const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
-    if (unordered || ordered) {
-      const orderedList = Boolean(ordered);
+    const ul = line.match(/^\s*[-*]\s+(.+)$/);
+    const olMatch = line.match(/^\s*\d+[.)]\s+(.+)$/);
+    if (ul || olMatch) {
+      const ordered = Boolean(olMatch);
       const items: string[] = [];
       while (index < lines.length) {
-        const match = orderedList ? lines[index].match(/^\s*\d+[.)]\s+(.+)$/) : lines[index].match(/^\s*[-*]\s+(.+)$/);
-        if (!match) break;
-        items.push(match[1]);
+        const m = ordered
+          ? lines[index].match(/^\s*\d+[.)]\s+(.+)$/)
+          : lines[index].match(/^\s*[-*]\s+(.+)$/);
+        if (!m) break;
+        items.push(m[1]);
         index += 1;
       }
-      const ListTag = orderedList ? "ol" : "ul";
-      blocks.push(<ListTag key={blocks.length}>{items.map((item, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(item)}</li>)}</ListTag>);
+      const ListTag = ordered ? "ol" : "ul";
+      blocks.push(
+        <ListTag key={blocks.length}>
+          {items.map((item, i) => (
+            <li key={i}>{renderInline(item)}</li>
+          ))}
+        </ListTag>
+      );
       continue;
     }
 
     const paragraph: string[] = [];
     while (index < lines.length && lines[index].trim()) {
-      if (/^(#{1,4})\s+/.test(lines[index]) || /^\s*[-*]\s+/.test(lines[index]) || /^\s*\d+[.)]\s+/.test(lines[index]) || isMarkdownTable(lines, index)) {
+      if (
+        /^(#{1,4})\s+/.test(lines[index]) ||
+        /^\s*[-*]\s+/.test(lines[index]) ||
+        /^\s*\d+[.)]\s+/.test(lines[index]) ||
+        isTable(lines, index)
+      ) {
         break;
       }
       paragraph.push(lines[index].trim());
       index += 1;
     }
     if (paragraph.length) {
-      blocks.push(<p key={blocks.length}>{renderInlineMarkdown(paragraph.join(" "))}</p>);
+      blocks.push(<p key={blocks.length}>{renderInline(paragraph.join(" "))}</p>);
     }
   }
 
   return <div className="markdown-view">{blocks}</div>;
 }
 
-function renderInlineMarkdown(text: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
-  return parts.map((part, index) => {
+function renderInline(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={index}>{part.slice(2, -2)}</strong>;
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
     }
-    return <React.Fragment key={index}>{part}</React.Fragment>;
+    return <React.Fragment key={i}>{part}</React.Fragment>;
   });
 }
 
-function isMarkdownTable(lines: string[], index: number) {
+function isTable(lines: string[], i: number) {
   return Boolean(
-    lines[index]?.includes("|") &&
-    lines[index + 1]?.includes("|") &&
-    /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[index + 1])
+    lines[i]?.includes("|") &&
+    lines[i + 1]?.includes("|") &&
+    /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[i + 1])
   );
 }
 
-function splitMarkdownTableRow(line: string) {
-  return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
+function splitRow(line: string) {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((c) => c.trim());
 }
-

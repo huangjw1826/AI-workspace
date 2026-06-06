@@ -26,7 +26,7 @@ logger = get_logger()
 class TaskEventType(str, Enum):
     """SSE 事件类型枚举。
 
-    定义 6 种任务事件类型，客户端可据此过滤和处理不同状态变化。
+    定义 7 种事件类型，客户端可据此过滤和处理不同状态变化。
     """
     TASK_STARTED = "task.started"       # 任务开始执行
     TASK_PROCESSING = "task.processing" # 任务处理中
@@ -34,6 +34,7 @@ class TaskEventType(str, Enum):
     TASK_COMPLETED = "task.completed"   # 任务成功完成
     TASK_FAILED = "task.failed"         # 任务执行失败
     TASK_CANCELLED = "task.cancelled"   # 任务被取消
+    RECORDING_CREATED = "recording.created"  # 新录音入库
 
 
 @dataclass
@@ -215,6 +216,19 @@ class SSEService:
             message="Task completed",
             timestamp=datetime.now(timezone.utc).isoformat(),
             data={"result_path": result_path} if result_path else None,
+        )
+        await self.broadcast(event)
+
+    async def emit_recording_created(self, recording_id: str, filename: str) -> None:
+        """发送新录音入库事件。"""
+        event = TaskEvent(
+            event_id=str(uuid4()),
+            event_type=TaskEventType.RECORDING_CREATED,
+            task_id="",
+            recording_id=recording_id,
+            progress=0,
+            message=f"新录音: {filename}",
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
         await self.broadcast(event)
 

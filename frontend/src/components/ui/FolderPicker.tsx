@@ -29,17 +29,12 @@ export function FolderPicker({
         onError?.(msg);
         return;
       }
-      if (result.cancelled) {
-        return;
-      }
-      if (result.path) {
-        onChange(result.path);
-      }
+      if (result.cancelled) return;
+      if (result.path) onChange(result.path);
     } catch (err) {
       const message = err instanceof Error ? err.message : "未知错误";
       setError(message);
       onError?.(message);
-      console.warn("Folder picker failed:", err);
     } finally {
       setBusy(false);
     }
@@ -48,20 +43,21 @@ export function FolderPicker({
   return (
     <div className="folder-picker">
       <input
-        className="folder-picker-input"
+        className="form-input folder-picker-input"
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
         spellCheck={false}
+        disabled={disabled}
       />
       <button
-        className="folder-picker-btn secondary compact"
+        className="btn btn-secondary btn-sm folder-picker-btn"
         disabled={disabled || busy}
         onClick={handlePick}
         title="选择文件夹"
         type="button"
       >
-        <FolderOpen size={16} />
+        <FolderOpen size={14} />
         {busy ? "…" : "选择"}
       </button>
       {error && <span className="folder-picker-error">{error}</span>}

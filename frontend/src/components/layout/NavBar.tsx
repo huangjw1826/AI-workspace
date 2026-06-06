@@ -1,7 +1,22 @@
-import { Activity, Database, FileAudio, FolderSearch, RefreshCw, Settings, Upload } from "lucide-react";
-import type React from "react";
+import React from "react";
+import {
+  Activity,
+  Database,
+  FileAudio,
+  FolderSearch,
+  RefreshCw,
+  Settings,
+  Upload,
+} from "lucide-react";
 import type { HealthStatus } from "../../lib/types";
 import type { View } from "../../lib/viewTypes";
+
+const NAV_ITEMS: { view: View; icon: React.ReactNode; label: string }[] = [
+  { view: "library", icon: <Database size={16} />, label: "录音库" },
+  { view: "watch", icon: <FolderSearch size={16} />, label: "目录监控" },
+  { view: "settings", icon: <Settings size={16} />, label: "设置" },
+  { view: "health", icon: <Activity size={16} />, label: "系统状态" },
+];
 
 export function NavBar({
   view,
@@ -20,39 +35,47 @@ export function NavBar({
 }) {
   return (
     <header className="nav">
-      <div className="brand">
-        <FileAudio size={22} />
-        <span>AI Recorder</span>
-      </div>
+      <button className="brand" onClick={() => onViewChange("library")}>
+        <div className="brand-icon">
+          <FileAudio size={16} strokeWidth={2.5} />
+        </div>
+        <span className="brand-name">AI Recorder</span>
+      </button>
+
       <nav className="nav-links" aria-label="主导航">
-        <button className={view === "library" ? "nav-item active" : "nav-item"} onClick={() => onViewChange("library")}>
-          <Database size={17} /> 录音库
-        </button>
-        <button className={view === "watch" ? "nav-item active" : "nav-item"} onClick={() => onViewChange("watch")}>
-          <FolderSearch size={17} /> 目录监控
-        </button>
-        <button className={view === "settings" ? "nav-item active" : "nav-item"} onClick={() => onViewChange("settings")}>
-          <Settings size={17} /> 设置
-        </button>
-        <button className={view === "health" ? "nav-item active" : "nav-item"} onClick={() => onViewChange("health")}>
-          <Activity size={17} /> 系统状态
-        </button>
+        {NAV_ITEMS.map((item) => (
+          <button
+            key={item.view}
+            className={`nav-item${view === item.view ? " active" : ""}`}
+            onClick={() => onViewChange(item.view)}
+          >
+            {item.icon}
+            <span>{item.label}</span>
+          </button>
+        ))}
       </nav>
+
       <div className="nav-actions">
         <div className="nav-status">
-          <span className={health?.status === "ok" ? "dot ok-bg" : "dot bad-bg"} />
+          <span className={`status-dot${health?.status === "ok" ? " ok" : " bad"}`} />
           <span>{health?.status === "ok" ? "服务正常" : "待检查"}</span>
         </div>
-        <label className="primary upload-button">
-          <Upload size={16} />
-          <span>{busy ? "处理中" : "上传录音"}</span>
-          <input type="file" accept=".wav,.mp3,.m4a,.flac,.aac,.ogg" onChange={onUpload} />
+
+        <label className="btn btn-secondary upload-btn" title="上传录音文件">
+          <Upload size={15} />
+          <span>{busy ? "处理中..." : "上传录音"}</span>
+          <input
+            type="file"
+            accept=".wav,.mp3,.m4a,.flac,.aac,.ogg"
+            onChange={onUpload}
+            disabled={busy}
+          />
         </label>
-        <button className="secondary" onClick={onRefresh}>
-          <RefreshCw size={16} /> 刷新
+
+        <button className="btn btn-icon" onClick={onRefresh} title="刷新数据">
+          <RefreshCw size={16} />
         </button>
       </div>
     </header>
   );
 }
-

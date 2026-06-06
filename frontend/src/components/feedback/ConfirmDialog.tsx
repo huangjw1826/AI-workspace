@@ -18,14 +18,24 @@ export function ConfirmDialog({
   if (!state) return null;
 
   return (
-    <div className="confirm-backdrop" role="dialog" aria-modal="true" aria-label={state.title}>
-      <div className="confirm-card">
+    <div
+      className="confirm-backdrop anim-fade-in"
+      role="dialog"
+      aria-modal="true"
+      aria-label={state.title}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+    >
+      <div className="confirm-card anim-scale-in">
         <h2>{state.title}</h2>
         <p>{state.message}</p>
         <div className="confirm-actions">
-          <button className="secondary" disabled={busy} onClick={onCancel}>取消</button>
+          <button className="btn btn-ghost" disabled={busy} onClick={onCancel}>
+            取消
+          </button>
           <button
-            className={state.tone === "danger" ? "danger-button" : "primary"}
+            className={state.tone === "danger" ? "btn btn-danger" : "btn btn-primary"}
             disabled={busy}
             onClick={() => void state.onConfirm()}
           >
@@ -36,4 +46,3 @@ export function ConfirmDialog({
     </div>
   );
 }
-

@@ -10,7 +10,7 @@
 .\check.ps1
 ```
 
-如果出现 `[FAIL]`，优先处理失败项。如果只是 `[WARN] 服务当前可能未启动`，通常运行 `.\start-all.ps1` 即可。
+如果出现 `[FAIL]`，优先处理失败项。如果只是 `[WARN] 服务当前可能未启动`，通常运行 `.\start.ps1` 即可。
 
 ## 浏览器打不开页面
 
@@ -25,8 +25,7 @@ http://127.0.0.1:8000
 然后按顺序运行：
 
 ```powershell
-.\stop-all.ps1
-.\start-all.ps1
+.\stop.ps1 然后 .\start.ps1
 ```
 
 如果仍然打不开，查看：
@@ -41,11 +40,10 @@ logs/backend.err.log
 通常是上次服务没有正常退出。运行：
 
 ```powershell
-.\stop-all.ps1
-.\start-all.ps1
+.\stop.ps1 然后 .\start.ps1
 ```
 
-新的 `stop-all.ps1` 会清理旧进程号，并释放本地应用端口。
+`stop.ps1` + `start.ps1` 会先清理旧进程再重新启动。
 
 ## 上传后没有自动转写
 
@@ -82,7 +80,7 @@ logs/backend.err.log
 优先处理方式：
 
 1. 确认已有 `frontend/dist/index.html`
-2. 直接运行 `.\start-all.ps1`
+2. 直接运行 `.\start.ps1`
 3. 如果必须重新构建，再运行 `.\setup.ps1`
 
 如果 `setup.ps1` 仍然失败，保留报错内容，再让开发助手继续处理。

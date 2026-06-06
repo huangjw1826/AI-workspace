@@ -22,11 +22,24 @@ from sqlmodel import Session, select
 from app.config import get_settings
 from app.db.database import engine
 from app.models import Recording, WatchEvent
-from app.services.file_service import audio_suffix, content_hash, is_supported_audio
+from app.services.file_service import audio_suffix, content_hash, is_supported_audio, file_creation_time
 
 SYNC_IGNORE_SUFFIXES = {".tmp", ".temp", ".part", ".crdownload", ".download"}
 SYNC_IGNORE_PREFIXES = ("~$",)
 SYNC_CONFLICT_KEYWORDS = ("conflicted copy",)
+
+
+def _sync_recording_info(recording: Recording, path: Path, stat, digest: str) -> None:
+    """将录音记录的全部文件信息同步到当前磁盘文件的状态。"""
+    recording.filename = path.name
+    recording.original_path = str(path)
+    recording.source_path = str(path)
+    recording.format = audio_suffix(path)
+    recording.file_size_bytes = stat.st_size
+    recording.source_mtime = stat.st_mtime
+    recording.content_hash = digest
+    recording.created_at = file_creation_time(path)
+    recording.updated_at = datetime.now(timezone.utc)
 
 
 def _is_sync_temp_file(path: Path) -> bool:
@@ -98,7 +111,14 @@ class DirectoryWatcher:
             interval = max(2, int(settings.watch_interval_seconds or 10))
             if settings.watch_enabled:
                 try:
-                    await asyncio.to_thread(self.scan_once, False)
+                    events = await asyncio.to_thread(self.scan_once, False)
+                    # Emit SSE for new recordings
+                    imported = [e for e in events if e.status in ("imported", "synced") and e.recording_id]
+                    if imported:
+                        from app.services.sse_service import get_sse_service
+                        sse = await get_sse_service()
+                        for e in imported:
+                            await sse.emit_recording_created(e.recording_id, e.filename)
                 except Exception:
                     pass
             await asyncio.sleep(interval)
@@ -195,7 +215,30 @@ class DirectoryWatcher:
 
             existing_recording = session.exec(select(Recording).where(Recording.content_hash == digest)).first()
             if existing_recording is not None:
-                # 文件已存在，记录重复跳过事件
+                old_path_str = existing_recording.original_path or ""
+                if old_path_str and Path(old_path_str) != path:
+                    # 文件被重命名/移动/复制到监控目录：更新全部文件信息
+                    _sync_recording_info(existing_recording, path, stat, digest)
+                    session.add(existing_recording)
+                    session.commit()
+                    session.refresh(existing_recording)
+
+                    event = WatchEvent(
+                        file_path=str(path),
+                        filename=path.name,
+                        status="synced",
+                        reason="文件已重命名/移动，路径已更新",
+                        recording_id=existing_recording.id,
+                        content_hash=digest,
+                        file_size=stat.st_size,
+                        file_mtime=stat.st_mtime,
+                    )
+                    session.add(event)
+                    session.commit()
+                    session.refresh(event)
+                    return event
+
+                # 文件内容已存在，路径也相同 → 真正重复
                 event = WatchEvent(
                     file_path=str(path),
                     filename=path.name,
@@ -203,6 +246,31 @@ class DirectoryWatcher:
                     reason="文件内容已处理过",
                     recording_id=existing_recording.id,
                     duplicate_of_id=existing_recording.id,
+                    content_hash=digest,
+                    file_size=stat.st_size,
+                    file_mtime=stat.st_mtime,
+                )
+                session.add(event)
+                session.commit()
+                session.refresh(event)
+                return event
+
+            # 检查是否已有同一路径的录音（文件内容已变化，需更新元数据）
+            same_path_recording = session.exec(
+                select(Recording).where(Recording.original_path == str(path))
+            ).first()
+            if same_path_recording is not None:
+                _sync_recording_info(same_path_recording, path, stat, digest)
+                session.add(same_path_recording)
+                session.commit()
+                session.refresh(same_path_recording)
+
+                event = WatchEvent(
+                    file_path=str(path),
+                    filename=path.name,
+                    status="synced",
+                    reason="文件已更新，元数据已同步",
+                    recording_id=same_path_recording.id,
                     content_hash=digest,
                     file_size=stat.st_size,
                     file_mtime=stat.st_mtime,
@@ -223,6 +291,7 @@ class DirectoryWatcher:
                 source_mtime=stat.st_mtime,
                 source_type="watch",
                 source_path=str(path),
+                created_at=file_creation_time(path),
             )
             session.add(recording)
             session.commit()

@@ -1,45 +1,82 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { RecordingDetail } from "../lib/types";
 
+// ---------------------------------------------------------------------------
+// Toast
+// ---------------------------------------------------------------------------
+export type ToastTone = "info" | "success" | "error";
+
+export interface ToastMessage {
+  id: number;
+  message: string;
+  tone: ToastTone;
+}
+
+// ---------------------------------------------------------------------------
+// Store
+// ---------------------------------------------------------------------------
 export interface AppState {
+  // persisted
   sidebarCollapsed: boolean;
-  currentRecordingId: string | null;
   playbackPosition: Record<string, number>;
+
+  // transient (not persisted)
+  busy: boolean;
+  error: string;
+  toasts: ToastMessage[];
+
+  // actions
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
-  setCurrentRecordingId: (id: string | null) => void;
   setPlaybackPosition: (recordingId: string, position: number) => void;
   getPlaybackPosition: (recordingId: string) => number;
+
+  setBusy: (busy: boolean) => void;
+  setError: (error: string) => void;
+  showToast: (message: string, tone?: ToastTone) => void;
+  dismissToast: (id: number) => void;
 }
 
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
+      // persisted
       sidebarCollapsed: false,
-      currentRecordingId: null,
       playbackPosition: {},
 
+      // transient
+      busy: false,
+      error: "",
+      toasts: [],
+
+      // persisted actions
       toggleSidebar: () =>
-        set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+        set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 
-      setSidebarCollapsed: (collapsed) =>
-        set({ sidebarCollapsed: collapsed }),
-
-      setCurrentRecordingId: (id) =>
-        set({ currentRecordingId: id }),
+      setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
 
       setPlaybackPosition: (recordingId, position) =>
-        set((state) => ({
-          playbackPosition: {
-            ...state.playbackPosition,
-            [recordingId]: position,
-          },
+        set((s) => ({
+          playbackPosition: { ...s.playbackPosition, [recordingId]: position },
         })),
 
-      getPlaybackPosition: (recordingId) => {
-        return get().playbackPosition[recordingId] ?? 0;
+      getPlaybackPosition: (recordingId) =>
+        get().playbackPosition[recordingId] ?? 0,
+
+      // transient actions
+      setBusy: (busy) => set({ busy }),
+      setError: (error) => set({ error }),
+
+      showToast: (message, tone = "info") => {
+        const id = Date.now() + Math.random();
+        set((s) => ({ toasts: [...s.toasts, { id, message, tone }] }));
+        setTimeout(() => {
+          set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+        }, 2600);
       },
+
+      dismissToast: (id) =>
+        set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
     }),
     {
       name: "ai-recorder-app-storage",

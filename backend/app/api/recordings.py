@@ -1,30 +1,33 @@
+"""
+Recording CRUD — list, upload, get, delete, batch-delete, tags, segment editing.
+"""
+
 import json
-import mimetypes
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import quote
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
-from starlette.responses import StreamingResponse
 from sqlmodel import Session, delete, select
 
 from app.config import get_settings
 from app.db.database import get_session
 from app.models import Recording, Summary, Task, TranscriptSegment
-from app.services.docx_export import build_docx
-from app.services.export_names import safe_filename_part, transcript_filename
-from app.services.file_service import content_hash
+from app.services.export_names import safe_filename_part
+from app.services.file_service import content_hash, file_creation_time
 
 router = APIRouter(prefix="/api/recordings", tags=["recordings"])
 
-# 单个上传文件最大 500 MB
-MAX_UPLOAD_SIZE = 500 * 1024 * 1024
-STREAM_CHUNK_SIZE = 1024 * 1024
+MAX_UPLOAD_SIZE = 500 * 1024 * 1024  # 500 MB
+STREAM_CHUNK_SIZE = 1024 * 1024      # 1 MB
 MATCH_SNIPPET_LENGTH = 80
 
+
+# ---------------------------------------------------------------------------
+# Request models
+# ---------------------------------------------------------------------------
 
 class RecordingTagsUpdate(BaseModel):
     tags: list[str] = Field(default_factory=list, max_length=20)
@@ -42,6 +45,10 @@ class TranscriptSegmentUpdate(BaseModel):
 class BatchRecordingRequest(BaseModel):
     recording_ids: list[str] = Field(min_length=1, max_length=200)
 
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -63,32 +70,53 @@ def _tag_text(tags: list[str]) -> str:
     return ",".join(_normalize_tags(tags))
 
 
-def _recording_library_dir() -> Path:
+def _library_dir() -> Path:
     settings = get_settings()
     watch_dir = settings.resolved_watch_dir
     if watch_dir is None or not watch_dir.is_dir():
-        raise HTTPException(status_code=400, detail="请先在“目录监控”中设置可用的录音目录，再上传录音")
+        raise HTTPException(status_code=400, detail='请先在"目录监控"中设置可用的录音目录，再上传录音')
     return watch_dir
 
 
-def _unique_target_path(directory: Path, filename: str, suffix: str) -> Path:
-    raw_name = Path(filename or "recording").name
-    stem = safe_filename_part(Path(raw_name).stem, "recording")
+def _unique_path(directory: Path, filename: str, suffix: str) -> Path:
+    stem = safe_filename_part(Path(filename or "recording").stem, "recording")
     target = directory / f"{stem}.{suffix}"
-    index = 1
+    idx = 1
     while target.exists():
-        target = directory / f"{stem}-{index}.{suffix}"
-        index += 1
+        target = directory / f"{stem}-{idx}.{suffix}"
+        idx += 1
     return target
 
 
-def _is_app_managed_original(path: Path) -> bool:
-    data_recordings_dir = (get_settings().resolved_data_dir / "recordings").resolve()
+def _is_managed_original(path: Path) -> bool:
+    data_dir = (get_settings().resolved_data_dir / "recordings").resolve()
     try:
-        return path.resolve().is_relative_to(data_recordings_dir)
+        return path.resolve().is_relative_to(data_dir)
     except Exception:
         return False
 
+
+def _segments_payload(segments: list[TranscriptSegment]) -> list[dict[str, object]]:
+    return [
+        {"start_time": s.start_time, "end_time": s.end_time, "speaker": s.speaker, "text": s.text, "sequence": s.sequence}
+        for s in segments
+    ]
+
+
+def _write_transcript_json(session: Session, recording_id: str) -> Path:
+    segments = session.exec(
+        select(TranscriptSegment)
+        .where(TranscriptSegment.recording_id == recording_id)
+        .order_by(TranscriptSegment.sequence)
+    ).all()
+    path = get_settings().resolved_transcript_dir / f"{recording_id}.json"
+    path.write_text(json.dumps(_segments_payload(segments), ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
 
 @router.get("")
 def list_recordings(
@@ -96,61 +124,55 @@ def list_recordings(
     tag: str = Query("", max_length=40),
     session: Session = Depends(get_session),
 ) -> SearchResult:
-    if not isinstance(query, str):
-        query = ""
-    if not isinstance(tag, str):
-        tag = ""
+    """List recordings with optional full-text search and tag filter."""
     recordings = session.exec(select(Recording).order_by(Recording.created_at.desc())).all()
-    normalized_query = query.strip().lower()
-    normalized_tag = tag.strip().lower()
-    if not normalized_query and not normalized_tag:
+    q = query.strip().lower()
+    t = tag.strip().lower()
+    if not q and not t:
         return SearchResult(recordings=list(recordings), match_previews={})
 
-    segments_by_recording: dict[str, list[str]] = {}
-    summaries_by_recording: dict[str, list[str]] = {}
-    if normalized_query:
-        for segment in session.exec(select(TranscriptSegment)).all():
-            segments_by_recording.setdefault(segment.recording_id, []).append(segment.text)
-        for summary in session.exec(select(Summary)).all():
-            summaries_by_recording.setdefault(summary.recording_id, []).append(summary.content)
+    # Preload segments and summaries for full-text search
+    seg_map: dict[str, list[str]] = {}
+    sum_map: dict[str, list[str]] = {}
+    if q:
+        for seg in session.exec(select(TranscriptSegment)).all():
+            seg_map.setdefault(seg.recording_id, []).append(seg.text)
+        for s in session.exec(select(Summary)).all():
+            sum_map.setdefault(s.recording_id, []).append(s.content)
 
     matched: list[Recording] = []
-    match_previews: dict[str, list[str]] = {}
-    for recording in recordings:
-        tags = [item.strip().lower() for item in recording.tags.split(",") if item.strip()]
-        if normalized_tag and normalized_tag not in tags:
+    previews: dict[str, list[str]] = {}
+    for r in recordings:
+        tags = [x.strip().lower() for x in r.tags.split(",") if x.strip()]
+        if t and t not in tags:
             continue
-        if normalized_query:
-            searchable_fields: list[tuple[str, str]] = [
-                ("filename", recording.filename),
-                ("tags", recording.tags),
-            ]
-            for text in segments_by_recording.get(recording.id, []):
-                searchable_fields.append(("transcript", text))
-            for text in summaries_by_recording.get(recording.id, []):
-                searchable_fields.append(("summary", text))
-            searchable = "\n".join(v for _, v in searchable_fields).lower()
-            if normalized_query not in searchable:
+        if q:
+            fields: list[tuple[str, str]] = [("filename", r.filename), ("tags", r.tags)]
+            for text in seg_map.get(r.id, []):
+                fields.append(("transcript", text))
+            for text in sum_map.get(r.id, []):
+                fields.append(("summary", text))
+            haystack = "\n".join(v for _, v in fields).lower()
+            if q not in haystack:
                 continue
-
-            previews: list[str] = []
-            for field_name, text in searchable_fields:
-                lower_text = text.lower()
-                pos = lower_text.find(normalized_query)
+            # Build snippet previews
+            snippets: list[str] = []
+            for field_name, text in fields:
+                pos = text.lower().find(q)
                 if pos >= 0:
                     start = max(0, pos - MATCH_SNIPPET_LENGTH)
-                    end = min(len(text), pos + len(normalized_query) + MATCH_SNIPPET_LENGTH)
+                    end = min(len(text), pos + len(q) + MATCH_SNIPPET_LENGTH)
                     snippet = text[start:end].strip()
                     if start > 0:
                         snippet = "..." + snippet
                     if end < len(text):
-                        snippet = snippet + "..."
-                    previews.append(f"[{field_name}] {snippet}")
-            if previews:
-                match_previews[recording.id] = previews[:5]
+                        snippet += "..."
+                    snippets.append(f"[{field_name}] {snippet}")
+            if snippets:
+                previews[r.id] = snippets[:5]
+        matched.append(r)
 
-        matched.append(recording)
-    return SearchResult(recordings=matched, match_previews=match_previews)
+    return SearchResult(recordings=matched, match_previews=previews)
 
 
 @router.post("")
@@ -158,28 +180,26 @@ async def upload_recording(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
 ) -> Recording:
-    settings = get_settings()
+    """Upload an audio file (max 500 MB, 6 supported formats)."""
     suffix = Path(file.filename or "").suffix.lower().lstrip(".")
     if suffix not in {"wav", "mp3", "m4a", "flac", "aac", "ogg"}:
         raise HTTPException(status_code=400, detail="不支持的音频格式，请上传 wav、mp3、m4a、flac、aac 或 ogg 文件")
 
-    library_dir = _recording_library_dir()
+    settings = get_settings()
+    library_dir = _library_dir()
     temp_path = settings.resolved_data_dir / "recordings" / f".upload-{uuid4().hex}.tmp"
     temp_path.parent.mkdir(parents=True, exist_ok=True)
     bytes_written = 0
     try:
-        with temp_path.open("wb") as output:
+        with temp_path.open("wb") as out:
             while True:
                 chunk = await file.read(STREAM_CHUNK_SIZE)
                 if not chunk:
                     break
                 bytes_written += len(chunk)
                 if bytes_written > MAX_UPLOAD_SIZE:
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"文件过大，最大支持 {MAX_UPLOAD_SIZE // (1024 * 1024)} MB",
-                    )
-                output.write(chunk)
+                    raise HTTPException(status_code=413, detail=f"文件过大，最大支持 {MAX_UPLOAD_SIZE // (1024 * 1024)} MB")
+                out.write(chunk)
 
         digest = content_hash(temp_path)
         existing = session.exec(select(Recording).where(Recording.content_hash == digest)).first()
@@ -190,31 +210,30 @@ async def upload_recording(
         temp_path.unlink(missing_ok=True)
         raise
 
-    recording = Recording(
-        filename=file.filename or "recording",
-        original_path="",
-        format=suffix,
-        content_hash=digest,
-        file_size_bytes=bytes_written,
-        source_type="upload",
-        source_path="",
-    )
-    target = _unique_target_path(library_dir, file.filename or f"{recording.id}.{suffix}", suffix)
+    target = _unique_path(library_dir, file.filename or f"upload.{suffix}", suffix)
     shutil.move(str(temp_path), str(target))
-    recording.original_path = str(target)
-    recording.source_path = str(target)
-    recording.source_mtime = target.stat().st_mtime
+
+    recording = Recording(
+        filename=file.filename or "recording", original_path=str(target), format=suffix,
+        content_hash=digest, file_size_bytes=bytes_written, source_type="upload",
+        source_path=str(target), source_mtime=target.stat().st_mtime,
+        created_at=file_creation_time(target),
+    )
     session.add(recording)
     session.commit()
     session.refresh(recording)
+
+    # Notify connected clients of new recording
+    from app.services.sse_service import get_sse_service
+    sse = await get_sse_service()
+    await sse.emit_recording_created(recording.id, recording.filename)
+
     return recording
 
 
 @router.patch("/{recording_id}/tags")
 def update_recording_tags(
-    recording_id: str,
-    payload: RecordingTagsUpdate,
-    session: Session = Depends(get_session),
+    recording_id: str, payload: RecordingTagsUpdate, session: Session = Depends(get_session),
 ) -> Recording:
     recording = session.get(Recording, recording_id)
     if recording is None:
@@ -229,10 +248,7 @@ def update_recording_tags(
 
 @router.patch("/{recording_id}/segments/{segment_id}")
 def update_transcript_segment(
-    recording_id: str,
-    segment_id: str,
-    payload: TranscriptSegmentUpdate,
-    session: Session = Depends(get_session),
+    recording_id: str, segment_id: str, payload: TranscriptSegmentUpdate, session: Session = Depends(get_session),
 ) -> TranscriptSegment:
     recording = session.get(Recording, recording_id)
     if recording is None:
@@ -260,305 +276,82 @@ def update_transcript_segment(
 
 @router.post("/batch-delete")
 def delete_recordings_batch(
-    payload: BatchRecordingRequest,
-    session: Session = Depends(get_session),
+    payload: BatchRecordingRequest, session: Session = Depends(get_session),
 ) -> dict[str, object]:
     deleted: list[str] = []
     missing: list[str] = []
-    for recording_id in payload.recording_ids:
-        recording = session.get(Recording, recording_id)
-        if recording is None:
-            missing.append(recording_id)
+    for rid in payload.recording_ids:
+        rec = session.get(Recording, rid)
+        if rec is None:
+            missing.append(rid)
             continue
-        delete_recording(recording_id, session)
-        deleted.append(recording_id)
+        _delete_one(rid, session)
+        deleted.append(rid)
     return {"deleted": deleted, "missing": missing}
 
 
 @router.delete("/{recording_id}")
 def delete_recording(recording_id: str, session: Session = Depends(get_session)) -> dict[str, str]:
+    rec = session.get(Recording, recording_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail="录音不存在")
+    _delete_one(recording_id, session)
+    return {"message": "删除成功"}
+
+
+def _delete_one(recording_id: str, session: Session) -> None:
+    """Delete a recording and all associated data (segments, summaries, tasks, files)."""
     settings = get_settings()
     recording = session.get(Recording, recording_id)
     if recording is None:
-        raise HTTPException(status_code=404, detail="录音不存在")
+        return
 
-    # 删除关联数据
+    # Cascade delete DB records
     session.exec(delete(TranscriptSegment).where(TranscriptSegment.recording_id == recording_id))
     session.exec(delete(Summary).where(Summary.recording_id == recording_id))
     session.exec(delete(Task).where(Task.recording_id == recording_id))
 
-    # 删除硬盘上的文件
+    # Clean up disk files (best-effort)
     try:
         if recording.original_path:
-            original_path = Path(recording.original_path)
-            if _is_app_managed_original(original_path):
-                original_path.unlink(missing_ok=True)
+            p = Path(recording.original_path)
+            if _is_managed_original(p):
+                p.unlink(missing_ok=True)
         if recording.normalized_path:
             Path(recording.normalized_path).unlink(missing_ok=True)
-        for transcript_dir in {settings.resolved_transcript_dir, settings.resolved_data_dir / "transcripts"}:
-            (transcript_dir / f"{recording_id}.json").unlink(missing_ok=True)
-        for summary_dir in {settings.resolved_summary_dir, settings.resolved_data_dir / "summaries"}:
-            for summary_file in summary_dir.glob(f"{recording_id}-*.md"):
-                summary_file.unlink(missing_ok=True)
-            for summary_file in summary_dir.glob(f"*{recording_id}.md"):
-                summary_file.unlink(missing_ok=True)
+        for d in {settings.resolved_transcript_dir, settings.resolved_data_dir / "transcripts"}:
+            (d / f"{recording_id}.json").unlink(missing_ok=True)
+        for d in {settings.resolved_summary_dir, settings.resolved_data_dir / "summaries"}:
+            for f in list(d.glob(f"{recording_id}-*.md")) + list(d.glob(f"*{recording_id}.md")):
+                f.unlink(missing_ok=True)
     except Exception:
-        pass  # 文件删除失败不影响数据库操作
+        pass
 
     session.delete(recording)
     session.commit()
-    return {"message": "删除成功"}
-
-
-def _format_time(value: float | None) -> str:
-    if value is None:
-        return "--:--"
-    total_seconds = max(0, int(round(value)))
-    minutes = total_seconds // 60
-    seconds = total_seconds % 60
-    return f"{minutes:02d}:{seconds:02d}"
-
-
-def _download_response(content: str, filename: str, media_type: str) -> Response:
-    encoded = quote(filename)
-    return Response(
-        content=content,
-        media_type=f"{media_type}; charset=utf-8",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
-    )
-
-
-def _download_bytes_response(content: bytes, filename: str, media_type: str) -> Response:
-    encoded = quote(filename)
-    return Response(
-        content=content,
-        media_type=media_type,
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
-    )
-
-
-def _transcript_payload(segments: list[TranscriptSegment]) -> list[dict[str, object]]:
-    return [
-        {
-            "start_time": segment.start_time,
-            "end_time": segment.end_time,
-            "speaker": segment.speaker,
-            "text": segment.text,
-            "sequence": segment.sequence,
-        }
-        for segment in segments
-    ]
-
-
-def _write_transcript_json(session: Session, recording_id: str) -> Path:
-    segments = session.exec(
-        select(TranscriptSegment)
-        .where(TranscriptSegment.recording_id == recording_id)
-        .order_by(TranscriptSegment.sequence)
-    ).all()
-    transcript_path = get_settings().resolved_transcript_dir / f"{recording_id}.json"
-    transcript_path.write_text(json.dumps(_transcript_payload(segments), ensure_ascii=False, indent=2), encoding="utf-8")
-    return transcript_path
-
-
-def _srt_timestamp(value: float | None) -> str:
-    total_milliseconds = max(0, int(round((value or 0) * 1000)))
-    milliseconds = total_milliseconds % 1000
-    total_seconds = total_milliseconds // 1000
-    seconds = total_seconds % 60
-    total_minutes = total_seconds // 60
-    minutes = total_minutes % 60
-    hours = total_minutes // 60
-    return f"{hours:02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}"
-
-
-def _audio_media_type(path: Path) -> str:
-    guessed_type, _ = mimetypes.guess_type(path.name)
-    return guessed_type or "application/octet-stream"
-
-
-def _parse_range_header(range_header: str | None, file_size: int) -> tuple[int, int, int]:
-    if not isinstance(range_header, str):
-        range_header = None
-    if not range_header:
-        return 0, max(0, file_size - 1), 200
-    if not range_header.startswith("bytes=") or file_size <= 0:
-        raise HTTPException(status_code=416, detail="Invalid range")
-
-    range_value = range_header.removeprefix("bytes=").strip()
-    if "," in range_value or "-" not in range_value:
-        raise HTTPException(status_code=416, detail="Invalid range")
-
-    start_raw, end_raw = range_value.split("-", 1)
-    try:
-        if start_raw == "":
-            suffix_length = int(end_raw)
-            if suffix_length <= 0:
-                raise ValueError
-            start = max(0, file_size - suffix_length)
-            end = file_size - 1
-        else:
-            start = int(start_raw)
-            end = int(end_raw) if end_raw else file_size - 1
-    except ValueError as exc:
-        raise HTTPException(status_code=416, detail="Invalid range") from exc
-
-    if start < 0 or end < start or start >= file_size:
-        raise HTTPException(status_code=416, detail="Invalid range")
-    return start, min(end, file_size - 1), 206
-
-
-def _iter_file_range(path: Path, start: int, end: int):
-    with path.open("rb") as handle:
-        handle.seek(start)
-        remaining = end - start + 1
-        while remaining > 0:
-            chunk = handle.read(min(STREAM_CHUNK_SIZE, remaining))
-            if not chunk:
-                break
-            remaining -= len(chunk)
-            yield chunk
-
-
-@router.get("/{recording_id}/audio")
-def get_recording_audio(
-    recording_id: str,
-    range_header: str | None = Header(default=None, alias="Range"),
-    session: Session = Depends(get_session),
-) -> StreamingResponse:
-    recording = session.get(Recording, recording_id)
-    if recording is None:
-        raise HTTPException(status_code=404, detail="录音不存在")
-
-    path = Path(recording.original_path)
-    if not path.exists() or not path.is_file():
-        raise HTTPException(status_code=404, detail="音频文件不存在")
-
-    file_size = path.stat().st_size
-    start, end, status_code = _parse_range_header(range_header, file_size)
-    headers = {
-        "Accept-Ranges": "bytes",
-        "Content-Length": str(end - start + 1 if file_size else 0),
-        "Content-Disposition": f"inline; filename*=UTF-8''{quote(path.name)}",
-    }
-    if status_code == 206:
-        headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
-
-    return StreamingResponse(
-        _iter_file_range(path, start, end),
-        status_code=status_code,
-        media_type=_audio_media_type(path),
-        headers=headers,
-    )
-
-
-@router.get("/{recording_id}/exports/transcript")
-def export_transcript(
-    recording_id: str,
-    format: str = Query("md", pattern="^(md|txt|json|srt|docx)$"),
-    session: Session = Depends(get_session),
-) -> Response:
-    recording = session.get(Recording, recording_id)
-    if recording is None:
-        raise HTTPException(status_code=404, detail="录音不存在")
-    segments = session.exec(
-        select(TranscriptSegment)
-        .where(TranscriptSegment.recording_id == recording_id)
-        .order_by(TranscriptSegment.sequence)
-    ).all()
-    if not segments:
-        raise HTTPException(status_code=400, detail="还没有转写内容可导出")
-
-    if format == "json":
-        filename = transcript_filename(recording.filename, recording.updated_at or recording.created_at, "json")
-        return _download_response(json.dumps(_transcript_payload(segments), ensure_ascii=False, indent=2), filename, "application/json")
-
-    if format == "srt":
-        lines: list[str] = []
-        for index, segment in enumerate(segments, start=1):
-            lines.extend(
-                [
-                    str(index),
-                    f"{_srt_timestamp(segment.start_time)} --> {_srt_timestamp(segment.end_time)}",
-                    segment.text,
-                    "",
-                ]
-            )
-        filename = transcript_filename(recording.filename, recording.updated_at or recording.created_at, "srt")
-        return _download_response("\n".join(lines), filename, "application/x-subrip")
-
-    if format == "docx":
-        lines = [
-            f"Status: {recording.status}",
-            f"Duration: {_format_time(recording.duration_seconds)}",
-            "",
-        ]
-        for segment in segments:
-            lines.append(f"{_format_time(segment.start_time)} - {_format_time(segment.end_time)}")
-            lines.append(segment.text)
-            lines.append("")
-        filename = transcript_filename(recording.filename, recording.updated_at or recording.created_at, "docx")
-        return _download_bytes_response(
-            build_docx(f"{recording.filename} Transcript", lines),
-            filename,
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        )
-
-    if format == "md":
-        lines = [
-            f"# {recording.filename} 转写",
-            "",
-            f"- 状态：{recording.status}",
-            f"- 时长：{_format_time(recording.duration_seconds)}",
-            f"- 大小：{recording.file_size_bytes or 0} bytes",
-            "",
-            "## 转写内容",
-            "",
-        ]
-        for segment in segments:
-            lines.extend(
-                [
-                    f"### {_format_time(segment.start_time)} - {_format_time(segment.end_time)}",
-                    "",
-                    segment.text,
-                    "",
-                ]
-            )
-        filename = transcript_filename(recording.filename, recording.updated_at or recording.created_at, "md")
-        return _download_response("\n".join(lines), filename, "text/markdown")
-
-    lines = [f"{recording.filename} 转写", f"时长：{_format_time(recording.duration_seconds)}", ""]
-    for segment in segments:
-        lines.append(f"[{_format_time(segment.start_time)} - {_format_time(segment.end_time)}] {segment.text}")
-    filename = transcript_filename(recording.filename, recording.updated_at or recording.created_at, "txt")
-    return _download_response("\n".join(lines), filename, "text/plain")
 
 
 @router.get("/{recording_id}")
 def get_recording(recording_id: str, session: Session = Depends(get_session)) -> dict[str, object]:
+    """Get recording detail with segments, summaries, and tasks."""
     recording = session.get(Recording, recording_id)
     if recording is None:
         raise HTTPException(status_code=404, detail="Recording not found")
+
     segments = session.exec(
-        select(TranscriptSegment)
-        .where(TranscriptSegment.recording_id == recording_id)
-        .order_by(TranscriptSegment.sequence)
+        select(TranscriptSegment).where(TranscriptSegment.recording_id == recording_id).order_by(TranscriptSegment.sequence)
     ).all()
     summaries = session.exec(
-        select(Summary)
-        .where(Summary.recording_id == recording_id)
-        .order_by(Summary.created_at.desc())
+        select(Summary).where(Summary.recording_id == recording_id).order_by(Summary.created_at.desc())
     ).all()
     tasks = session.exec(select(Task).where(Task.recording_id == recording_id)).all()
+
+    # Auto-promote status if summaries exist
     if summaries and recording.status != "completed":
         recording.status = "completed"
         recording.updated_at = datetime.now(timezone.utc)
         session.add(recording)
         session.commit()
         session.refresh(recording)
-    return {
-        "recording": recording,
-        "segments": segments,
-        "summaries": summaries,
-        "tasks": tasks,
-    }
+
+    return {"recording": recording, "segments": segments, "summaries": summaries, "tasks": tasks}

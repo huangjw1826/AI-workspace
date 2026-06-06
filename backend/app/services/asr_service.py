@@ -79,7 +79,7 @@ class ASRService:
             "model": self.settings.asr_model,
             "vad_model": self.settings.asr_vad_model,
             "punc_model": self.settings.asr_punc_model,
-            "device": self.settings.asr_device,
+            "device": self.settings.resolved_asr_device,
             "model_revision": "master",
             "vad_model_revision": "master",
             "punc_model_revision": "master",

@@ -66,7 +66,10 @@ class Settings(BaseSettings):
     ffmpeg_timeout_seconds: int = 600
 
     # --- ASR（语音转写）配置 ---
-    asr_device: str = "cpu"
+    # "auto" = 自动检测 CUDA，不可用时回退 CPU
+    # "cpu"  = 强制 CPU
+    # "cuda" = 强制 GPU
+    asr_device: str = "auto"
     asr_model: str = "paraformer-zh"
     asr_vad_model: str = "fsmn-vad"
     asr_punc_model: str = "ct-punc"
@@ -146,6 +149,20 @@ class Settings(BaseSettings):
     def resolved_summary_dir(self) -> Path:
         """摘要 Markdown 文件存储目录的绝对路径。"""
         return self.summary_dir.expanduser().resolve()
+
+    @property
+    def resolved_asr_device(self) -> str:
+        """解析 ASR 推理设备：auto 时自动检测 CUDA，不可用则回退 CPU。"""
+        device = self.asr_device.strip().lower()
+        if device != "auto":
+            return device
+        try:
+            import torch
+            if torch.cuda.is_available():
+                return "cuda"
+        except Exception:
+            pass
+        return "cpu"
 
     @property
     def cors_origin_list(self) -> list[str]:

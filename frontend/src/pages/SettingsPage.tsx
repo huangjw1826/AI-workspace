@@ -1,8 +1,22 @@
 import React from "react";
-import { Check, CheckCircle, Copy, HardDrive, Key, Settings, Trash2, XCircle } from "lucide-react";
+import {
+  Check,
+  CheckCircle,
+  Copy,
+  HardDrive,
+  Key,
+  Settings,
+  Trash2,
+  XCircle,
+} from "lucide-react";
 import { FolderPicker } from "../components/ui/FolderPicker";
 import { SettingsSection } from "../components/ui/SettingsSection";
-import { createApiToken, deleteApiToken, listApiTokens, updateApiToken } from "../lib/api";
+import {
+  createApiToken,
+  deleteApiToken,
+  listApiTokens,
+  updateApiToken,
+} from "../lib/api";
 import type {
   ApiToken,
   LlmConnectivityResult,
@@ -11,7 +25,10 @@ import type {
   StorageSettings,
 } from "../lib/types";
 
-type StorageDraft = Pick<StorageSettings, "data_dir" | "transcript_dir" | "summary_dir">;
+type StorageDraft = Pick<
+  StorageSettings,
+  "data_dir" | "transcript_dir" | "summary_dir"
+>;
 
 export function SettingsPage({
   storageDraft,
@@ -41,23 +58,31 @@ export function SettingsPage({
   applyProviderDefaults: (provider: LlmSettingsUpdate["provider"]) => void;
 }) {
   return (
-    <section className="main-panel page-panel settings-page">
+    <section className="page-panel anim-fade-in">
       <SettingsSection title="保存位置" icon={<HardDrive size={17} />}>
         <label>
           <span>数据总目录</span>
           <FolderPicker
             value={storageDraft.data_dir}
-            onChange={(path) => setStorageDraft((draft) => ({ ...draft, data_dir: path }))}
-            placeholder={storageSettings?.data_dir || "存放录音、数据库等所有数据的文件夹"}
+            onChange={(path) =>
+              setStorageDraft((d) => ({ ...d, data_dir: path }))
+            }
+            placeholder={
+              storageSettings?.data_dir || "存放录音、数据库等所有数据的文件夹"
+            }
             disabled={settingsBusy}
           />
-          <span className="muted">修改后需重启应用。多电脑共享数据？改到同步盘文件夹即可</span>
+          <span className="muted">
+            修改后需重启应用。多电脑共享数据？改到同步盘文件夹即可
+          </span>
         </label>
         <label>
           <span>转写保存目录</span>
           <FolderPicker
             value={storageDraft.transcript_dir}
-            onChange={(path) => setStorageDraft((draft) => ({ ...draft, transcript_dir: path }))}
+            onChange={(path) =>
+              setStorageDraft((d) => ({ ...d, transcript_dir: path }))
+            }
             placeholder="点击右侧选择按钮选择文件夹"
             disabled={settingsBusy}
           />
@@ -66,17 +91,25 @@ export function SettingsPage({
           <span>摘要保存目录</span>
           <FolderPicker
             value={storageDraft.summary_dir}
-            onChange={(path) => setStorageDraft((draft) => ({ ...draft, summary_dir: path }))}
+            onChange={(path) =>
+              setStorageDraft((d) => ({ ...d, summary_dir: path }))
+            }
             placeholder="点击右侧选择按钮选择文件夹"
             disabled={settingsBusy}
           />
         </label>
         <div className="button-row">
-          <button className="primary" disabled={settingsBusy} onClick={saveStorageSettings}>保存位置</button>
+          <button
+            className="btn btn-primary"
+            disabled={settingsBusy}
+            onClick={saveStorageSettings}
+          >
+            保存位置
+          </button>
         </div>
         <p className="muted">
-          转写目录：{storageSettings?.transcript_exists ? "可用" : "待检查"} · 摘要目录：
-          {storageSettings?.summary_exists ? "可用" : "待检查"}
+          转写目录：{storageSettings?.transcript_exists ? "可用" : "待检查"} ·
+          摘要目录：{storageSettings?.summary_exists ? "可用" : "待检查"}
         </p>
       </SettingsSection>
 
@@ -85,8 +118,13 @@ export function SettingsPage({
           <label>
             <span>服务商</span>
             <select
+              className="form-select"
               value={llmDraft.provider}
-              onChange={(event) => applyProviderDefaults(event.target.value as LlmSettingsUpdate["provider"])}
+              onChange={(e) =>
+                applyProviderDefaults(
+                  e.target.value as LlmSettingsUpdate["provider"]
+                )
+              }
             >
               <option value="mimo">小米 MiMo</option>
               <option value="deepseek">DeepSeek</option>
@@ -97,59 +135,90 @@ export function SettingsPage({
           <label>
             <span>模型</span>
             <input
+              className="form-input"
               value={llmDraft.model ?? ""}
-              onChange={(event) => setLlmDraft((draft) => ({ ...draft, model: event.target.value }))}
+              onChange={(e) =>
+                setLlmDraft((d) => ({ ...d, model: e.target.value }))
+              }
             />
           </label>
         </div>
         <label>
           <span>Base URL</span>
           <input
+            className="form-input"
             value={llmDraft.base_url ?? ""}
-            onChange={(event) => setLlmDraft((draft) => ({ ...draft, base_url: event.target.value }))}
+            onChange={(e) =>
+              setLlmDraft((d) => ({ ...d, base_url: e.target.value }))
+            }
           />
         </label>
         <label>
           <span>API Key</span>
           <input
+            className="form-input"
             type="password"
             value={llmDraft.api_key ?? ""}
             placeholder={llmSettings?.api_key_masked || "未配置"}
-            onChange={(event) => setLlmDraft((draft) => ({ ...draft, api_key: event.target.value }))}
+            onChange={(e) =>
+              setLlmDraft((d) => ({ ...d, api_key: e.target.value }))
+            }
           />
         </label>
         <div className="form-grid">
           <label>
             <span>Max Tokens</span>
             <input
+              className="form-input"
               type="number"
               min={1}
               value={llmDraft.max_completion_tokens ?? 2048}
-              onChange={(event) => setLlmDraft((draft) => ({ ...draft, max_completion_tokens: Number(event.target.value) }))}
+              onChange={(e) =>
+                setLlmDraft((d) => ({
+                  ...d,
+                  max_completion_tokens: Number(e.target.value),
+                }))
+              }
             />
           </label>
           <label>
             <span>Temperature</span>
             <input
+              className="form-input"
               type="number"
               min={0}
               max={1.5}
               step={0.1}
               value={llmDraft.temperature ?? ""}
-              onChange={(event) =>
-                setLlmDraft((draft) => ({
-                  ...draft,
-                  temperature: event.target.value === "" ? null : Number(event.target.value),
+              onChange={(e) =>
+                setLlmDraft((d) => ({
+                  ...d,
+                  temperature:
+                    e.target.value === "" ? null : Number(e.target.value),
                 }))
               }
             />
           </label>
         </div>
         <div className="button-row">
-          <button className="primary" disabled={settingsBusy} onClick={saveLlmSettings}>保存 LLM</button>
-          <button className="secondary" disabled={settingsBusy} onClick={checkLlmConnectivity}>测试连接</button>
+          <button
+            className="btn btn-primary"
+            disabled={settingsBusy}
+            onClick={saveLlmSettings}
+          >
+            保存 LLM
+          </button>
+          <button
+            className="btn btn-secondary"
+            disabled={settingsBusy}
+            onClick={checkLlmConnectivity}
+          >
+            测试连接
+          </button>
         </div>
-        {llmTest && <p className={llmTest.ok ? "ok" : "bad"}>{llmTest.message}</p>}
+        {llmTest && (
+          <p className={llmTest.ok ? "ok" : "bad"}>{llmTest.message}</p>
+        )}
       </SettingsSection>
 
       <ApiTokenSection />
@@ -163,7 +232,9 @@ function ApiTokenSection() {
   const [error, setError] = React.useState<string | null>(null);
   const [newTokenName, setNewTokenName] = React.useState("");
   const [creating, setCreating] = React.useState(false);
-  const [createdTokenData, setCreatedTokenData] = React.useState<{ token: string } | null>(null);
+  const [createdTokenData, setCreatedTokenData] = React.useState<{
+    token: string;
+  } | null>(null);
   const [copied, setCopied] = React.useState(false);
 
   React.useEffect(() => {
@@ -174,8 +245,7 @@ function ApiTokenSection() {
     setLoading(true);
     setError(null);
     try {
-      const data = await listApiTokens();
-      setTokens(data);
+      setTokens(await listApiTokens());
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载 Token 列表失败");
     } finally {
@@ -189,7 +259,7 @@ function ApiTokenSection() {
     setCreating(true);
     setError(null);
     try {
-      const result = await createApiToken({ name, device_info: JSON.stringify({}) });
+      const result = await createApiToken({ name, device_info: "{}" });
       setCreatedTokenData({ token: result.token ?? "" });
       setNewTokenName("");
       await loadTokens();
@@ -203,17 +273,20 @@ function ApiTokenSection() {
   async function handleToggleActive(token: ApiToken) {
     const original = tokens.find((t) => t.id === token.id);
     setTokens((prev) =>
-      prev.map((t) => (t.id === token.id ? { ...t, is_active: !t.is_active } : t))
+      prev.map((t) =>
+        t.id === token.id ? { ...t, is_active: !t.is_active } : t
+      )
     );
     try {
       await updateApiToken(token.id, { is_active: !token.is_active });
     } catch {
-      if (original) setTokens((prev) => prev.map((t) => (t.id === token.id ? original : t)));
+      if (original)
+        setTokens((prev) => prev.map((t) => (t.id === token.id ? original : t)));
     }
   }
 
   async function handleDelete(tokenId: string) {
-    if (!window.confirm("确定要删除此 Token 吗？使用此 Token 的设备将无法再访问。")) return;
+    if (!window.confirm("确定要删除此 Token 吗？")) return;
     const original = tokens.find((t) => t.id === tokenId);
     setTokens((prev) => prev.filter((t) => t.id !== tokenId));
     try {
@@ -224,12 +297,13 @@ function ApiTokenSection() {
   }
 
   function handleCopyToken(token: string) {
-    navigator.clipboard.writeText(token).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }).catch(() => {
-      setError("复制 Token 失败，请手动复制");
-    });
+    navigator.clipboard.writeText(token).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      },
+      () => setError("复制 Token 失败，请手动复制")
+    );
   }
 
   return (
@@ -240,7 +314,7 @@ function ApiTokenSection() {
           <div className="token-created-value">
             <code>{createdTokenData.token}</code>
             <button
-              className="icon-button"
+              className="btn btn-icon"
               onClick={() => handleCopyToken(createdTokenData.token)}
               title="复制 Token"
             >
@@ -248,7 +322,10 @@ function ApiTokenSection() {
             </button>
           </div>
           <div className="button-row">
-            <button className="primary" onClick={() => setCreatedTokenData(null)}>
+            <button
+              className="btn btn-primary"
+              onClick={() => setCreatedTokenData(null)}
+            >
               我已保存
             </button>
           </div>
@@ -259,14 +336,17 @@ function ApiTokenSection() {
             <span>设备名称</span>
             <div className="token-create-row">
               <input
+                className="form-input"
                 value={newTokenName}
                 onChange={(e) => setNewTokenName(e.target.value)}
                 placeholder="例如：我的 Android 手机"
                 disabled={creating}
-                onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleCreate();
+                }}
               />
               <button
-                className="primary"
+                className="btn btn-primary"
                 disabled={creating || !newTokenName.trim()}
                 onClick={handleCreate}
               >
@@ -278,7 +358,6 @@ function ApiTokenSection() {
       )}
 
       {loading && <p className="muted">加载中...</p>}
-
       {error && <p className="bad">{error}</p>}
 
       {!loading && !error && tokens.length === 0 && (
@@ -288,10 +367,17 @@ function ApiTokenSection() {
       {tokens.length > 0 && (
         <div className="token-list">
           {tokens.map((token) => (
-            <div key={token.id} className={`token-item ${token.is_active ? "" : "token-item-disabled"}`}>
+            <div
+              key={token.id}
+              className={`token-item${token.is_active ? "" : " token-item-disabled"}`}
+            >
               <div className="token-item-info">
                 <span className="token-item-name">{token.name}</span>
-                <span className={`token-item-status ${token.is_active ? "status-active" : "status-disabled"}`}>
+                <span
+                  className={`token-item-status${
+                    token.is_active ? " status-active" : " status-disabled"
+                  }`}
+                >
                   {token.is_active ? "活跃" : "已禁用"}
                 </span>
               </div>
@@ -305,7 +391,7 @@ function ApiTokenSection() {
               </div>
               <div className="token-item-actions">
                 <button
-                  className="icon-button"
+                  className="btn btn-icon"
                   onClick={() => handleToggleActive(token)}
                   title={token.is_active ? "禁用" : "启用"}
                 >
@@ -316,7 +402,7 @@ function ApiTokenSection() {
                   )}
                 </button>
                 <button
-                  className="icon-button"
+                  className="btn btn-icon"
                   onClick={() => handleDelete(token.id)}
                   title="删除"
                 >
@@ -328,7 +414,7 @@ function ApiTokenSection() {
         </div>
       )}
 
-      <p className="muted" style={{ fontSize: "12px" }}>
+      <p className="muted" style={{ fontSize: 12 }}>
         Token 用于 Android 客户端远程访问后端 API。每个设备应使用独立的 Token。
       </p>
     </SettingsSection>

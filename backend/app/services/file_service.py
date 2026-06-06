@@ -5,6 +5,7 @@ File service - 文件操作工具函数
 """
 
 import time
+from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 
@@ -110,3 +111,17 @@ def content_hash(path: Path) -> str:
         f"Failed to hash file after {HYDRATE_TIMEOUT:.0f}s: {path}\n"
         f"Last error: {last_error}"
     )
+
+
+def file_creation_time(path: Path) -> datetime:
+    """获取文件的修改时间（UTC），作为录音的创建时间。
+
+    录音文件通常不会被修改，因此 st_mtime 能准确反映录音时间。
+
+    Args:
+        path: 文件路径
+
+    Returns:
+        文件的修改时间（UTC datetime）
+    """
+    return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)

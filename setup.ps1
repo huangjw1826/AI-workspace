@@ -109,6 +109,41 @@ if (-not $SkipBackend) {
             exit 1
         }
         Write-Ok 'Python dependencies installed'
+
+        # --- Auto-detect GPU and install matching PyTorch ---
+        Write-Host 'Detecting GPU for PyTorch...'
+        $torchIndex = $null
+        try {
+            $nvidiaSmi = Get-Command nvidia-smi -ErrorAction SilentlyContinue
+            if ($nvidiaSmi) {
+                $gpuName = & nvidia-smi --query-gpu=name --format=csv,noheader 2>$null
+                if ($LASTEXITCODE -eq 0 -and $gpuName) {
+                    Write-Ok "GPU detected: $($gpuName -join ', ')"
+                    # RTX 50xx (Blackwell, CC 12.x) requires CUDA 13.x → nightly build
+                    if ($gpuName -match 'RTX 50') {
+                        Write-Host 'Blackwell GPU detected — installing PyTorch nightly (CUDA 13.0)...'
+                        $torchIndex = 'https://download.pytorch.org/whl/nightly/cu130'
+                    } else {
+                        Write-Host 'Installing PyTorch stable (CUDA 12.6)...'
+                        $torchIndex = 'https://download.pytorch.org/whl/cu126'
+                    }
+                }
+            }
+        } catch { }
+
+        if ($torchIndex) {
+            & $venvExe -m pip install torch torchaudio --index-url $torchIndex
+        } else {
+            Write-Ok 'No NVIDIA GPU detected — installing PyTorch CPU version'
+            & $venvExe -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+        }
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Err 'Failed to install PyTorch.'
+            Pop-Location
+            exit 1
+        }
+        Write-Ok 'PyTorch installed'
     } finally {
         Pop-Location
     }
@@ -183,7 +218,7 @@ Write-Host ''
 Write-Host '  Next steps:' -ForegroundColor Green
 Write-Host '  1. (Optional) Edit backend\.env to configure LLM and storage paths'
 Write-Host '  2. Run check.ps1 to verify the environment'
-Write-Host '  3. Run start-all.bat to launch the application'
+Write-Host '  3. Run start.ps1 to launch the application'
 Write-Host '  4. Open http://127.0.0.1:8000 in your browser'
 Write-Host ''
 Write-Host '  Run with -SkipFrontend or -SkipBackend to skip a section.' -ForegroundColor DarkGray

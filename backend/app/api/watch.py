@@ -11,13 +11,22 @@ from sqlmodel import Session, select
 
 from app.db.database import get_session
 from app.models import WatchEvent
+from app.services.sse_service import get_sse_service
 from app.services.watch_service import watcher
 
 router = APIRouter(prefix="/api/watch", tags=["watch"])
 
 
+async def _emit_new_recordings(events: list[WatchEvent]) -> None:
+    """针对导入事件发送 SSE 通知。"""
+    sse = await get_sse_service()
+    for e in events:
+        if e.status in ("imported", "synced") and e.recording_id:
+            await sse.emit_recording_created(e.recording_id, e.filename)
+
+
 @router.post("/scan")
-def scan_watch_dir() -> dict[str, object]:
+async def scan_watch_dir() -> dict[str, object]:
     """手动触发一次目录扫描（强制稳定模式）。
 
     与自动扫描的区别：
@@ -28,6 +37,7 @@ def scan_watch_dir() -> dict[str, object]:
         dict: 包含扫描到的事件数量和事件列表
     """
     events = watcher.scan_once(force_stable=True)
+    await _emit_new_recordings(events)
     return {"count": len(events), "events": events}
 
 

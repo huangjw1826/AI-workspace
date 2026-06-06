@@ -1,4 +1,4 @@
-import type React from "react";
+import React from "react";
 
 export function MetricCard({
   label,
@@ -15,20 +15,22 @@ export function MetricCard({
 }) {
   return (
     <div className="metric-card">
-      <div className="metric-top">
-        <span className="metric-icon">{icon}</span>
-        <span>{label}</span>
-      </div>
-      <strong>{value}</strong>
+      {icon && <div className="metric-icon-watermark">{icon}</div>}
+      <span className="metric-label">{label}</span>
+      <span className="metric-value">{value}</span>
       {progress === undefined ? (
-        <span>{hint}</span>
+        <span className="metric-hint">{hint}</span>
       ) : (
-        <div className="metric-progress">
-          <i style={{ width: `${progress}%` }} />
-          <span>{hint}</span>
-        </div>
+        <>
+          <div className="metric-progress-bar">
+            <div
+              className="metric-progress-fill"
+              style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+            />
+          </div>
+          <span className="metric-hint">{hint}</span>
+        </>
       )}
     </div>
   );
 }
-

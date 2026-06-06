@@ -22,6 +22,8 @@ from app.api.events import router as events_router
 from app.api.filesystem import router as filesystem_router
 from app.api.health import router as health_router
 from app.api.recordings import router as recordings_router
+from app.api.recording_audio import router as recording_audio_router
+from app.api.recording_export import router as recording_export_router
 from app.api.settings import router as settings_router
 from app.api.summary import export_router as summary_export_router
 from app.api.summary import router as summary_router
@@ -112,6 +114,8 @@ def create_app() -> FastAPI:
     app.include_router(events_router)
     app.include_router(health_router)
     app.include_router(filesystem_router)
+    app.include_router(recording_audio_router)    # more specific routes first
+    app.include_router(recording_export_router)
     app.include_router(recordings_router)
     app.include_router(transcribe_router)
     app.include_router(summary_router)

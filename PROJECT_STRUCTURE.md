@@ -1,6 +1,6 @@
 # AI Recorder 项目结构说明
 
-> 版本：v3.0+ | 最后更新：2026-05-28
+> 版本：v3.2.0 | 最后更新：2026-06-06
 
 ## 目录
 
@@ -82,7 +82,7 @@ AI-workspace/ (项目根目录)
 │   └── summaries/                    # 摘要结果 Markdown
 ├── models/                           # FunASR 离线模型缓存
 ├── logs/                             # 应用日志
-├── docs/                             # 项目文档 (26 文件)
+├── docs/                             # 项目文档
 │   ├── product/                      # 产品路线图和版本规划
 │   ├── decisions/                    # 架构决策记录 (ADR)
 │   └── *.md                         # 技术文档
@@ -93,8 +93,7 @@ AI-workspace/ (项目根目录)
 ├── PROJECT_STRUCTURE.md              # 本文件
 ├── CODE_WIKI.md                      # 代码维基
 ├── security_audit_report.md          # 安全审计报告
-├── *.ps1                             # PowerShell 启动/停止脚本
-└── *.bat                             # Batch 启动/停止脚本
+├── *.ps1                             # 启动/停止/管理脚本
 ```
 
 ---
@@ -404,15 +403,11 @@ data/
 
 | 脚本 | 类型 | 功能 |
 |------|------|------|
-| `start-all.ps1` | PowerShell | 一键启动：后端 (uvicorn) + 无头隐藏窗口 |
-| `stop-all.ps1` | PowerShell | 停止所有服务，清理 PID 文件 |
+| `start.ps1` | PowerShell | 一键启动：后端 + 浏览器自动打开 |
+| `stop.ps1` | PowerShell | 停止所有服务 |
 | `check.ps1` | PowerShell | 环境检查：依赖/端口/配置/服务状态 |
 | `setup.ps1` | PowerShell | 一键安装：venv、pip、npm、前端构建 |
 | `package-portable.ps1` | PowerShell | 打包便携版（含 miniconda + node） |
-| `start-all.bat` | Batch | 一键启动：前端构建 + 后端 + Cloudflare 隧道 |
-| `start-backend.bat` | Batch | 仅启动后端 FastAPI 服务 |
-| `start-tunnel.bat` | Batch | 仅启动 Cloudflare 隧道 |
-| `stop-all.bat` | Batch | 停止所有服务（cloudflared + 后端 + uvicorn） |
 | `backend/start.ps1` | PowerShell | 后端独立启动 (开发用) |
 | `frontend/build.ps1` | PowerShell | 前端构建 (npm run build) |
 
@@ -424,16 +419,12 @@ data/
 |------|------|
 | [README.md](README.md) | 项目入口文档 (安装、使用、配置) |
 | [CHANGELOG.md](CHANGELOG.md) | 完整变更日志 |
-| [CODE_WIKI.md](CODE_WIKI.md) | 代码维基 (类/函数/API 详细说明) |
+| [CODE_WIKI.md](CODE_WIKI.md) | API/模型/服务开发参考 |
 | [security_audit_report.md](security_audit_report.md) | 安全审计报告 |
-| [docs/project-analysis.md](docs/project-analysis.md) | 项目现状分析报告 |
 | [docs/TECH_STACK.md](docs/TECH_STACK.md) | 完整技术栈说明 |
 | [docs/product/roadmap.md](docs/product/roadmap.md) | 产品路线图 |
 | [docs/decisions/](docs/decisions/) | 架构决策记录 (ADR) |
 | [docs/android-remote-access.md](docs/android-remote-access.md) | Android 远程访问配置 |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | 故障排查指南 |
 | [docs/cloud-llm-providers.md](docs/cloud-llm-providers.md) | LLM 服务商配置 |
-| [backend/PROJECT_STRUCTURE.md](backend/PROJECT_STRUCTURE.md) | 后端详细结构 |
-| [frontend/PROJECT_STRUCTURE.md](frontend/PROJECT_STRUCTURE.md) | 前端详细结构 |
 | [android/README.md](android/README.md) | Android 端快速开始 |
-| [android/PROJECT_STRUCTURE.md](android/PROJECT_STRUCTURE.md) | Android 端详细结构 |
