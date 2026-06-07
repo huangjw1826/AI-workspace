@@ -127,20 +127,24 @@ class RemoteAccessManager:
             return False
 
     async def _preflight_check(self) -> None:
-        """启动前自检"""
-        checks = [
+        """启动前自检（cloudflared 和配置为硬阻断，后端连通性为软检查）"""
+        hard_checks = [
             ("Cloudflared binary", self._check_cloudflared_binary),
             ("Tunnel configuration", self._check_tunnel_config),
-            ("Backend service", self._check_backend_service),
         ]
-
-        for check_name, check_func in checks:
+        for check_name, check_func in hard_checks:
             try:
                 await check_func()
-                logger.info(f"[OK] {check_name}")
+                logger.info("[OK] %s", check_name)
             except Exception as e:
-                logger.error(f"[FAIL] {check_name}: {e}")
+                logger.error("[FAIL] %s: %s", check_name, e)
                 raise
+
+        # 后端连通性仅做探测，不阻断启动（启动阶段服务器尚未监听端口）
+        try:
+            await self._check_backend_service()
+        except Exception:
+            pass  # 已在 _check_backend_service 内部记录警告
 
     async def _check_cloudflared_binary(self) -> None:
         """检查 cloudflared 二进制文件"""
@@ -171,17 +175,22 @@ class RemoteAccessManager:
             raise ValueError("Either tunnel_name or tunnel_id must be configured")
 
     async def _check_backend_service(self) -> None:
-        """检查后端服务是否就绪"""
+        """检查后端服务是否就绪（单次探测，失败时警告不阻塞启动）
+
+        Uvicorn 在 startup 事件返回后才开始监听端口，因此自动启动时此检查
+        必定失败。这里只做 single-shot 探测，失败时记录警告但不影响隧道启动。
+        """
         import httpx
         url = f"http://{self.settings.app_host}:{self.settings.app_port}/health"
-        
         try:
-            async with httpx.AsyncClient(timeout=5) as client:
+            async with httpx.AsyncClient(timeout=3) as client:
                 response = await client.get(url)
-                if response.status_code != 200:
-                    raise ConnectionError(f"Backend returned status {response.status_code}")
+                if response.status_code == 200:
+                    logger.info("Backend service is reachable")
+                    return
+                logger.warning("Backend health check returned %d", response.status_code)
         except Exception as e:
-            raise ConnectionError(f"Backend service not reachable: {e}")
+            logger.warning("Backend health check unavailable (may be starting up): %s", e)
 
     async def _start_cloudflare_tunnel(self) -> bool:
         """启动 Cloudflare Tunnel"""
@@ -189,11 +198,12 @@ class RemoteAccessManager:
         log_path = self._get_log_path()
         pid_path = self._get_pid_path()
 
+        # --config 是 tunnel 级别的选项，必须在 run 子命令之前
         args = [
             str(self._get_cloudflared_path()),
             "tunnel",
-            "run",
             "--config", str(config_path),
+            "run",
         ]
 
         if self.settings.remote_access_tunnel_name:

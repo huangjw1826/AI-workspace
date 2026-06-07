@@ -10,8 +10,9 @@ foreach ($line in $connections) {
     $parts = $line -split '\s+'
     $targetPid = $parts[-1]
     if ($targetPid) {
-        Stop-Process -Id $targetPid -Force -ErrorAction SilentlyContinue
-        Write-Host "       已停止 PID $targetPid"
+        # taskkill /T 杀掉整个进程树（包括启动它的终端窗口）
+        $result = taskkill /PID $targetPid /T /F 2>&1
+        Write-Host "       已停止 PID $targetPid (含子进程)"
         $found = $true
     }
 }

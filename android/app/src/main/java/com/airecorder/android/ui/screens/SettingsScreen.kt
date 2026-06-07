@@ -2,6 +2,7 @@ package com.airecorder.android.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -203,7 +204,9 @@ class SettingsViewModel @Inject constructor(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    viewModel: SettingsViewModel = hiltViewModel()
+    viewModel: SettingsViewModel = hiltViewModel(),
+    onNavigateToWatch: () -> Unit = {},
+    onNavigateBack: () -> Unit = {}
 ) {
     val serverUrl by viewModel.serverUrl.collectAsState()
     val apiToken by viewModel.apiToken.collectAsState()
@@ -375,6 +378,14 @@ fun SettingsScreen(
 
             // --- 4. Storage & Monitoring ---
             SettingsGroup(title = "存储与监控") {
+                // Watch
+                SettingsRow(
+                    icon = Icons.Default.Visibility,
+                    title = "目录监控",
+                    value = "查看事件 >",
+                    status = HealthStatus.Good,
+                    onClick = onNavigateToWatch
+                )
                 // Storage
                 when (val state = storageSettingsState) {
                     is SettingsUiState.Success -> {
@@ -648,7 +659,9 @@ private fun SettingsRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (onClick != null) Modifier.background(Color.Transparent) else Modifier),
+            .then(
+                if (onClick != null) Modifier.clickable { onClick() } else Modifier
+            ),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Surface(

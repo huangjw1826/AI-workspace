@@ -15,19 +15,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
-import com.airecorder.android.data.local.PreferencesManager
-import kotlinx.coroutines.launch
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.airecorder.android.R
+import com.airecorder.android.data.local.PreferencesManager
 import com.airecorder.android.data.model.Recording
 import com.airecorder.android.ui.animation.SharedElementState
 import com.airecorder.android.ui.components.*
@@ -36,6 +33,10 @@ import com.airecorder.android.ui.util.rememberHapticFeedback
 import com.airecorder.android.util.ErrorUtils
 import com.airecorder.android.util.FormatUtils
 
+/**
+ * 录音库首页 —「声音档案馆」
+ * 底栏常驻，FAB 呼吸动画
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
@@ -49,7 +50,7 @@ fun LibraryScreen(
     LaunchedEffect(Unit) {
         viewModel.loadRecordings()
     }
-    
+
     val uiState by viewModel.uiState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedStatuses by viewModel.selectedStatuses.collectAsState()
@@ -57,153 +58,171 @@ fun LibraryScreen(
     val sortOption by viewModel.sortOption.collectAsState()
     val selectedRecordingIds by viewModel.selectedRecordingIds.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
-    
+
     var isSearchExpanded by remember { mutableStateOf(false) }
-    
+    var isOverviewExpanded by remember { mutableStateOf(true) }
     val coroutineScope = rememberCoroutineScope()
     val hapticFeedback = rememberHapticFeedback()
-    
-    var isOverviewExpanded by remember { mutableStateOf(true) }
-    
+
     LaunchedEffect(Unit) {
         preferencesManager.overviewExpanded.collect { expanded ->
             isOverviewExpanded = expanded
         }
     }
-    
-    val toggleOverview = {
+
+    val toggleOverview: () -> Unit = {
         val newState = !isOverviewExpanded
         isOverviewExpanded = newState
-        if (newState) {
-            isSearchExpanded = false
-        }
-        coroutineScope.launch {
-            preferencesManager.setOverviewExpanded(newState)
-        }
+        if (newState) isSearchExpanded = false
+        coroutineScope.launch { preferencesManager.setOverviewExpanded(newState) }
         Unit
     }
-    
+
     val isSelectionMode = selectedRecordingIds.isNotEmpty()
-    
-    Scaffold(
-        topBar = {
-            if (isSelectionMode) {
-                BatchOperationBar(
-                    selectedCount = selectedRecordingIds.size,
-                    onTranscribe = { hapticFeedback.performHeavyClick(); viewModel.batchTranscribe() },
-                    onSummarize = { hapticFeedback.performHeavyClick(); viewModel.batchSummarize() },
-                    onDelete = { hapticFeedback.performConfirm(); viewModel.batchDelete() },
-                    onDeselectAll = { viewModel.deselectAllRecordings() }
-                )
-            } else {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = "录音库",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    actions = {
-                        IconButton(onClick = toggleOverview) {
-                            Icon(
-                                imageVector = if (isOverviewExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = if (isOverviewExpanded) "收起概览" else "展开概览",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        IconButton(onClick = { 
-                            val newState = !isSearchExpanded
-                            isSearchExpanded = newState
-                            if (newState) {
-                                isOverviewExpanded = false
-                                coroutineScope.launch {
-                                    preferencesManager.setOverviewExpanded(false)
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            topBar = {
+                if (isSelectionMode) {
+                    BatchOperationBar(
+                        selectedCount = selectedRecordingIds.size,
+                        onTranscribe = { hapticFeedback.performHeavyClick(); viewModel.batchTranscribe() },
+                        onSummarize = { hapticFeedback.performHeavyClick(); viewModel.batchSummarize() },
+                        onDelete = { hapticFeedback.performConfirm(); viewModel.batchDelete() },
+                        onDeselectAll = { viewModel.deselectAllRecordings() }
+                    )
+                } else {
+                    TopAppBar(
+                        title = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "录音库",
+                                    style = TopBarTitleStyle,
+                                    color = TextPrimary
+                                )
+                                if (uiState is LibraryUiState.Success) {
+                                    val count = (uiState as LibraryUiState.Success).recordings.size
+                                    Text(
+                                        text = count.toString(),
+                                        style = CountStyle
+                                    )
+                                    Text(
+                                        text = "首",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = TextTertiary
+                                    )
                                 }
                             }
-                        }) {
-                            Icon(
-                                imageVector = if (isSearchExpanded) Icons.Default.FilterListOff else Icons.Default.FilterList,
-                                contentDescription = "搜索与筛选",
-                                tint = if (isSearchExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        IconButton(onClick = onUploadClick) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "上传音频",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Background,
-                        scrolledContainerColor = Surface
-                    )
-                )
-            }
-        },
-        containerColor = Background,
-        contentWindowInsets = WindowInsets.safeDrawing
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            when (val state = uiState) {
-                is LibraryUiState.Loading -> {
-                    SkeletonLoading()
-                }
-                is LibraryUiState.Success -> {
-                    if (state.recordings.isEmpty() && searchQuery.isEmpty() && 
-                        selectedStatuses.isEmpty() && selectedSource == null) {
-                        EmptyLibraryView()
-                    } else {
-                        ContentView(
-                            recordings = state.recordings,
-                            searchQuery = searchQuery,
-                            selectedStatuses = selectedStatuses,
-                            selectedSource = selectedSource,
-                            sortOption = sortOption,
-                            selectedRecordingIds = selectedRecordingIds,
-                            isRefreshing = isRefreshing,
-                            isSelectionMode = isSelectionMode,
-                            isSearchExpanded = isSearchExpanded,
-                            isOverviewExpanded = isOverviewExpanded,
-                            onSearchQueryChanged = { viewModel.onSearchQueryChanged(it) },
-                            onStatusToggle = { viewModel.toggleStatusFilter(it) },
-                            onSourceSelect = { viewModel.setSourceFilter(it) },
-                            onSortSelect = { viewModel.setSortOption(it) },
-                            onClearAllFilters = { viewModel.clearAllFilters() },
-                            onRemoveStatus = { viewModel.toggleStatusFilter(it) },
-                            onRemoveSource = { viewModel.setSourceFilter(null) },
-                            onRecordingClick = { id, coords ->
-                                onRecordItemClick?.invoke(
-                                    id,
-                                    state.recordings.find { it.id == id }?.filename ?: "",
-                                    FormatUtils.formatDuration(state.recordings.find { it.id == id }?.durationSeconds ?: 0.0),
-                                    coords
+                        },
+                        actions = {
+                            IconButton(onClick = toggleOverview) {
+                                Icon(
+                                    imageVector = if (isOverviewExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = if (isOverviewExpanded) "收起概览" else "展开概览",
+                                    tint = TextSecondary
                                 )
-                            },
-                            onRecordingLongClick = { hapticFeedback.performLongPress(); viewModel.toggleRecordingSelection(it) },
-                            onRefresh = { viewModel.refresh() }
+                            }
+                            IconButton(onClick = {
+                                isSearchExpanded = !isSearchExpanded
+                                if (isSearchExpanded) {
+                                    isOverviewExpanded = false
+                                    coroutineScope.launch { preferencesManager.setOverviewExpanded(false) }
+                                }
+                                Unit
+                            }) {
+                                Icon(
+                                    imageVector = if (isSearchExpanded) Icons.Default.FilterListOff else Icons.Default.FilterList,
+                                    contentDescription = "搜索与筛选",
+                                    tint = if (isSearchExpanded) Primary else TextSecondary
+                                )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Background,
+                            scrolledContainerColor = Surface
+                        )
+                    )
+                }
+            },
+            containerColor = Background,
+            contentWindowInsets = WindowInsets.safeDrawing
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                when (val state = uiState) {
+                    is LibraryUiState.Loading -> {
+                        SkeletonLoading()
+                    }
+                    is LibraryUiState.Success -> {
+                        if (state.recordings.isEmpty() && searchQuery.isEmpty() &&
+                            selectedStatuses.isEmpty() && selectedSource == null
+                        ) {
+                            EmptyLibraryView(onUploadClick = onUploadClick)
+                        } else {
+                            LibraryContent(
+                                recordings = state.recordings,
+                                searchQuery = searchQuery,
+                                selectedStatuses = selectedStatuses,
+                                selectedSource = selectedSource,
+                                sortOption = sortOption,
+                                selectedRecordingIds = selectedRecordingIds,
+                                isRefreshing = isRefreshing,
+                                isSelectionMode = isSelectionMode,
+                                isSearchExpanded = isSearchExpanded,
+                                isOverviewExpanded = isOverviewExpanded,
+                                onSearchQueryChanged = { viewModel.onSearchQueryChanged(it) },
+                                onStatusToggle = { viewModel.toggleStatusFilter(it) },
+                                onSourceSelect = { viewModel.setSourceFilter(it) },
+                                onSortSelect = { viewModel.setSortOption(it) },
+                                onClearAllFilters = { viewModel.clearAllFilters() },
+                                onRemoveStatus = { viewModel.toggleStatusFilter(it) },
+                                onRemoveSource = { viewModel.setSourceFilter(null) },
+                                onRecordingClick = { id, coords ->
+                                    onRecordItemClick?.invoke(
+                                        id,
+                                        state.recordings.find { it.id == id }?.filename ?: "",
+                                        FormatUtils.formatDuration(state.recordings.find { it.id == id }?.durationSeconds ?: 0.0),
+                                        coords
+                                    )
+                                },
+                                onRecordingLongClick = {
+                                    hapticFeedback.performLongPress()
+                                    viewModel.toggleRecordingSelection(it)
+                                },
+                                onRefresh = { viewModel.refresh() }
+                            )
+                        }
+                    }
+                    is LibraryUiState.Error -> {
+                        ErrorState(
+                            error = ErrorUtils.getFriendlyErrorMessage(state.message),
+                            onRetry = { viewModel.refresh() }
                         )
                     }
                 }
-                is LibraryUiState.Error -> {
-                    ErrorState(
-                        error = ErrorUtils.getFriendlyErrorMessage(state.message),
-                        onRetry = { viewModel.refresh() }
-                    )
-                }
             }
+        }
+
+        // 呼吸动画 FAB — 右下角悬浮
+        if (!isSelectionMode) {
+            UploadFAB(
+                onClick = onUploadClick,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 20.dp, bottom = 20.dp)
+            )
         }
     }
 }
 
 @Composable
-private fun ContentView(
+private fun LibraryContent(
     recordings: List<Recording>,
     searchQuery: String,
     selectedStatuses: Set<String>,
@@ -225,28 +244,25 @@ private fun ContentView(
     onRecordingLongClick: (String) -> Unit,
     onRefresh: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        // 概览指标卡片
         MetricCardsRow(
             recordings = recordings,
             isExpanded = isOverviewExpanded
         )
-        
+
+        // 搜索 + 筛选栏
         AnimatedVisibility(
             visible = isSearchExpanded,
             enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
             exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 SearchBar(
                     query = searchQuery,
                     onQueryChange = onSearchQueryChanged,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                 )
-                
                 FilterChips(
                     selectedStatuses = selectedStatuses,
                     onStatusToggle = onStatusToggle,
@@ -257,7 +273,8 @@ private fun ContentView(
                 )
             }
         }
-        
+
+        // 激活的筛选标签
         ActiveFilterTags(
             selectedStatuses = selectedStatuses,
             selectedSource = selectedSource,
@@ -265,7 +282,8 @@ private fun ContentView(
             onRemoveSource = onRemoveSource,
             onClearAll = onClearAllFilters
         )
-        
+
+        // 录音列表
         if (recordings.isEmpty()) {
             EmptyFilteredView()
         } else {
@@ -291,15 +309,16 @@ private fun SearchBar(
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
-        modifier = modifier
-            .fillMaxWidth(),
-        placeholder = { Text("搜索文件名") },
+        modifier = modifier.fillMaxWidth(),
+        placeholder = {
+            Text("搜索录音、转写内容...", color = TextPlaceholder)
+        },
         leadingIcon = {
             Icon(
                 imageVector = Icons.Outlined.Search,
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
-                tint = TextSecondary
+                tint = TextTertiary
             )
         },
         trailingIcon = {
@@ -307,13 +326,13 @@ private fun SearchBar(
                 IconButton(onClick = { onQueryChange("") }) {
                     Icon(
                         imageVector = Icons.Default.Clear,
-                        contentDescription = null,
+                        contentDescription = "清除搜索",
                         modifier = Modifier.size(18.dp)
                     )
                 }
             }
         },
-        shape = RoundedCornerShape(12.dp),
+        shape = TextFieldShape,
         colors = OutlinedTextFieldDefaults.colors(
             unfocusedContainerColor = Surface,
             focusedContainerColor = Surface,
@@ -344,7 +363,7 @@ private fun RecordingList(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 80.dp),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             items(
@@ -358,74 +377,9 @@ private fun RecordingList(
                     onClick = { onRecordingClick(recording.id, itemPositions[recording.id]) },
                     onLongClick = { onRecordingLongClick(recording.id) },
                     onPositioned = { coords -> itemPositions[recording.id] = coords },
-                    modifier = Modifier.animateItem(
-                        placementSpec = tween(300)
-                    )
+                    modifier = Modifier.animateItem(placementSpec = tween(300))
                 )
             }
         }
     }
 }
-
-@Composable
-private fun EmptyLibraryView() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.MicNone,
-            contentDescription = null,
-            modifier = Modifier.size(80.dp),
-            tint = TextTertiary
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "还没有录音",
-            style = MaterialTheme.typography.titleLarge,
-            color = TextSecondary
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "点击右上角 + 上传音频文件",
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextTertiary,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun EmptyFilteredView() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.SearchOff,
-            contentDescription = null,
-            modifier = Modifier.size(80.dp),
-            tint = TextTertiary
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "没有找到匹配的录音",
-            style = MaterialTheme.typography.titleLarge,
-            color = TextSecondary
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "尝试调整筛选条件",
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextTertiary
-        )
-    }
-}
-
-

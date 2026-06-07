@@ -1,6 +1,7 @@
 package com.airecorder.android.data.repository
 
 import com.airecorder.android.data.local.AudioCacheManager
+import com.airecorder.android.data.local.RecordingCache
 import com.airecorder.android.data.model.*
 import com.airecorder.android.data.remote.ApiService
 import kotlinx.coroutines.Dispatchers
@@ -110,7 +111,12 @@ class RecordingRepository @Inject constructor(
             try {
                 val response = apiService.getRecordings(query)
                 if (response.isSuccessful && response.body() != null) {
-                    Result.success(response.body()!!)
+                    val result = response.body()!!
+                    // 仅缓存无筛选条件的结果
+                    if (query.isEmpty()) {
+                        RecordingCache.putRecordings(result.recordings)
+                    }
+                    Result.success(result)
                 } else {
                     Result.failure(Exception("Failed to load recordings: ${response.code()}"))
                 }
@@ -118,13 +124,27 @@ class RecordingRepository @Inject constructor(
                 Result.failure(e)
             }
         }
-    
+
+    /** 缓存优先的录音列表加载 */
+    suspend fun getRecordingsCached(query: String = ""): Pair<List<Recording>?, Result<SearchResult>> {
+        // 先尝试缓存
+        val cached = if (query.isEmpty()) {
+            RecordingCache.getRecordings()
+        } else null
+
+        // 网络请求
+        val result = getRecordings(query)
+        return Pair(cached, result)
+    }
+
     suspend fun getRecording(id: String): Result<RecordingDetail> =
         withContext(Dispatchers.IO) {
             try {
                 val response = apiService.getRecording(id)
                 if (response.isSuccessful && response.body() != null) {
-                    Result.success(response.body()!!)
+                    val detail = response.body()!!
+                    RecordingCache.putRecordingDetail(id, detail)
+                    Result.success(detail)
                 } else {
                     Result.failure(Exception("Failed to load recording: ${response.code()}"))
                 }
@@ -132,6 +152,18 @@ class RecordingRepository @Inject constructor(
                 Result.failure(e)
             }
         }
+
+    /** 缓存优先的录音详情加载 */
+    suspend fun getRecordingCached(id: String): Pair<RecordingDetail?, Result<RecordingDetail>> {
+        val cached = RecordingCache.getRecordingDetail(id)
+        val result = getRecording(id)
+        return Pair(cached, result)
+    }
+
+    /** 清除所有录音缓存 */
+    suspend fun invalidateCache() {
+        RecordingCache.invalidateRecordings()
+    }
     
     suspend fun uploadRecording(file: File, fileName: String): Result<Recording> =
         withContext(Dispatchers.IO) {

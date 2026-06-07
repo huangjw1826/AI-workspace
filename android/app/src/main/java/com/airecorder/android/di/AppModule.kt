@@ -8,6 +8,7 @@ import com.airecorder.android.data.remote.ApiService
 import com.airecorder.android.data.remote.AuthInterceptor
 import com.airecorder.android.data.remote.TokenProvider
 import com.airecorder.android.data.remote.DefaultTokenProvider
+import com.airecorder.android.service.ConnectivityMonitor
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import androidx.media3.exoplayer.ExoPlayer
 import dagger.Module
@@ -98,4 +99,8 @@ object AppModule {
             .setLooper(android.os.Looper.getMainLooper())
             .build()
     }
+
+    @Provides
+    @Singleton
+    fun provideConnectivityMonitor(): ConnectivityMonitor = ConnectivityMonitor()
 }

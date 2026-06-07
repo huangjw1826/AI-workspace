@@ -2,34 +2,33 @@ package com.airecorder.android.ui.screens.watch
 
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.airecorder.android.R
 import com.airecorder.android.data.model.WatchEvent
 import com.airecorder.android.ui.components.ErrorState
+import com.airecorder.android.ui.components.LoadingIndicator
 import com.airecorder.android.ui.theme.*
 import com.airecorder.android.util.ErrorUtils
 import com.airecorder.android.util.FormatUtils
 import com.airecorder.android.ui.util.rememberHapticFeedback
 
+/**
+ * 目录监控页面 — 从设置页进入
+ * 显示文件系统变动事件列表
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WatchScreen(
@@ -39,16 +38,25 @@ fun WatchScreen(
     val hapticFeedback = rememberHapticFeedback()
     val uiState by viewModel.uiState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
                         text = "目录监控",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        style = TopBarTitleStyle,
+                        color = TextPrimary
                     )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回",
+                            tint = OnSurface
+                        )
+                    }
                 },
                 actions = {
                     IconButton(
@@ -84,10 +92,7 @@ fun WatchScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(
-                            color = Primary,
-                            modifier = Modifier.size(48.dp)
-                        )
+                        LoadingIndicator(size = 40)
                     }
                 }
                 is WatchUiState.Error -> {
@@ -101,27 +106,7 @@ fun WatchScreen(
                 }
                 is WatchUiState.Success -> {
                     if (state.events.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.VisibilityOff,
-                                    contentDescription = null,
-                                    tint = TextTertiary,
-                                    modifier = Modifier.size(64.dp)
-                                )
-                                Text(
-                                    text = "暂无监控事件",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = TextSecondary
-                                )
-                            }
-                        }
+                        WatchEmptyState()
                     } else {
                         WatchEventList(
                             events = state.events,
@@ -130,6 +115,50 @@ fun WatchScreen(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WatchEmptyState() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Surface(
+                color = SurfaceVariant,
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier.size(72.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.VisibilityOff,
+                        contentDescription = null,
+                        tint = TextTertiary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "暂无监控事件",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "当监控目录有文件变动时将显示在这里",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextTertiary
+                )
             }
         }
     }
@@ -150,14 +179,12 @@ private fun WatchEventList(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(events, key = { it.id }) { event ->
                 WatchEventItem(
                     event = event,
-                    modifier = Modifier.animateItem(
-                        placementSpec = tween(300)
-                    )
+                    modifier = Modifier.animateItem(placementSpec = tween(300))
                 )
             }
         }
@@ -169,16 +196,22 @@ fun WatchEventItem(
     event: WatchEvent,
     modifier: Modifier = Modifier
 ) {
+    val statusColor = when (event.status) {
+        "added" -> Primary
+        "processed" -> HealthGreen
+        "error" -> Error
+        "duplicate" -> TextSecondary
+        else -> TextTertiary
+    }
+
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = Surface
-        ),
-        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Surface),
+        shape = CardShape,
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
@@ -190,30 +223,30 @@ fun WatchEventItem(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val statusIcon = when (event.status) {
-                        "added" -> Icons.Default.AddCircle
-                        "processed" -> Icons.Default.CheckCircle
-                        "error" -> Icons.Default.Error
-                        "duplicate" -> Icons.Default.FileCopy
-                        else -> Icons.Default.Info
+                    Surface(
+                        color = statusColor.copy(alpha = 0.1f),
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = when (event.status) {
+                                    "added" -> Icons.Default.AddCircle
+                                    "processed" -> Icons.Default.CheckCircle
+                                    "error" -> Icons.Default.Error
+                                    "duplicate" -> Icons.Default.FileCopy
+                                    else -> Icons.Default.Info
+                                },
+                                contentDescription = null,
+                                tint = statusColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
-                    val statusColor = when (event.status) {
-                        "added" -> Primary
-                        "processed" -> StatusSuccess
-                        "error" -> StatusError
-                        "duplicate" -> TextSecondary
-                        else -> TextTertiary
-                    }
-                    Icon(
-                        imageVector = statusIcon,
-                        contentDescription = null,
-                        tint = statusColor,
-                        modifier = Modifier.size(24.dp)
-                    )
                     Text(
                         text = event.statusLabel,
                         style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.SemiBold,
                         color = statusColor
                     )
                 }
@@ -223,7 +256,7 @@ fun WatchEventItem(
                     color = TextTertiary
                 )
             }
-            
+
             Text(
                 text = event.filename,
                 style = MaterialTheme.typography.bodyMedium,
@@ -232,7 +265,7 @@ fun WatchEventItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            
+
             if (event.filePath.isNotBlank()) {
                 Text(
                     text = event.filePath,
@@ -242,7 +275,7 @@ fun WatchEventItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            
+
             if (event.fileSize != null) {
                 Text(
                     text = FormatUtils.formatFileSize(event.fileSize.toLong()),
@@ -250,20 +283,20 @@ fun WatchEventItem(
                     color = TextTertiary
                 )
             }
-            
+
             event.reason?.let { reason ->
                 Surface(
                     color = when (event.status) {
-                        "error" -> StatusErrorLight.copy(alpha = 0.3f)
+                        "error" -> ErrorContainer
                         else -> SecondaryContainer
                     },
-                    shape = RoundedCornerShape(8.dp)
+                    shape = MaterialTheme.shapes.extraSmall
                 ) {
                     Text(
                         text = reason,
                         style = MaterialTheme.typography.bodySmall,
                         color = when (event.status) {
-                            "error" -> StatusError
+                            "error" -> Error
                             else -> TextSecondary
                         },
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)

@@ -4,32 +4,30 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.airecorder.android.ui.theme.Primary
-import com.airecorder.android.ui.theme.PrimaryContainer
-import com.airecorder.android.ui.theme.StatusSuccess
-import com.airecorder.android.ui.theme.StatusSuccessLight
+import com.airecorder.android.ui.theme.*
 import kotlinx.coroutines.delay
 
-// 加载动画
+// ============================================================
+// 加载指示器
+// ============================================================
 @Composable
 fun LoadingIndicator(
     modifier: Modifier = Modifier,
@@ -45,7 +43,7 @@ fun LoadingIndicator(
         ),
         label = "rotation"
     )
-    
+
     Box(
         modifier = modifier.size(size.dp),
         contentAlignment = Alignment.Center
@@ -54,13 +52,15 @@ fun LoadingIndicator(
             modifier = Modifier
                 .size(size.dp)
                 .rotate(rotation),
-            color = MaterialTheme.colorScheme.primary,
+            color = Primary,
             strokeWidth = 3.dp
         )
     }
 }
 
+// ============================================================
 // 成功动画
+// ============================================================
 @Composable
 fun SuccessAnimation(
     modifier: Modifier = Modifier,
@@ -75,13 +75,13 @@ fun SuccessAnimation(
         ),
         label = "scale"
     )
-    
+
     LaunchedEffect(Unit) {
         delay(2000)
         visible = false
         onComplete()
     }
-    
+
     Box(
         modifier = modifier.size(80.dp),
         contentAlignment = Alignment.Center
@@ -107,7 +107,9 @@ fun SuccessAnimation(
     }
 }
 
+// ============================================================
 // 卡片淡入动画
+// ============================================================
 @Composable
 fun FadeInCard(
     visible: Boolean,
@@ -128,7 +130,9 @@ fun FadeInCard(
     }
 }
 
+// ============================================================
 // 数值变化动画
+// ============================================================
 @Composable
 fun AnimatedCounter(
     targetValue: Int,
@@ -136,17 +140,12 @@ fun AnimatedCounter(
     prefix: String = "",
     suffix: String = ""
 ) {
-    var currentValue by remember { mutableStateOf(0) }
     val animatedValue by animateIntAsState(
         targetValue = targetValue,
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
         label = "counter"
     )
-    
-    LaunchedEffect(targetValue) {
-        currentValue = targetValue
-    }
-    
+
     Text(
         text = "$prefix$animatedValue$suffix",
         style = MaterialTheme.typography.titleLarge.copy(
@@ -158,43 +157,73 @@ fun AnimatedCounter(
     )
 }
 
-// 脉冲动画
+// ============================================================
+// 呼吸脉冲动画（FAB 专用）
+// ============================================================
 @Composable
-fun PulseAnimation(
+fun BreathingPulseAnimation(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val infiniteTransition = rememberInfiniteTransition(label = "breathing")
     val scale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = 1.05f,
+        targetValue = 1.06f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
+            animation = tween(2000, easing = EaseInOutCubic),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "pulse_scale"
+        label = "breath_scale"
     )
-    
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.7f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_alpha"
-    )
-    
+
     Box(
         modifier = modifier
             .scale(scale)
-            .graphicsLayer { this.alpha = alpha }
+            .graphicsLayer {
+                // 微妙的透明度变化
+                alpha = 0.85f + (scale - 1f) * 3f
+            }
     ) {
         content()
     }
 }
 
-// 淡入淡出的内容切换
+// ============================================================
+// FAB 上传按钮（呼吸动画版）
+// ============================================================
+@Composable
+fun UploadFAB(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BreathingPulseAnimation(
+        modifier = modifier
+    ) {
+        FloatingActionButton(
+            onClick = onClick,
+            shape = FABShape,
+            containerColor = Primary,
+            contentColor = Color.White,
+            elevation = FloatingActionButtonDefaults.elevation(
+                defaultElevation = 6.dp,
+                pressedElevation = 10.dp
+            ),
+            modifier = Modifier
+                .size(56.dp)
+                .shadow(12.dp, FABShape, ambientColor = Primary.copy(alpha = 0.3f))
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "上传音频",
+                modifier = Modifier.size(26.dp)
+            )
+        }
+    }
+}
+
+// ============================================================
+// 淡入淡出内容切换
+// ============================================================
 @Composable
 fun AnimatedContentSwitch(
     isLoading: Boolean,
@@ -223,3 +252,8 @@ fun AnimatedContentSwitch(
         }
     }
 }
+
+// ============================================================
+// 自定义缓动曲线
+// ============================================================
+private val EaseInOutCubic: Easing = CubicBezierEasing(0.65f, 0f, 0.35f, 1f)

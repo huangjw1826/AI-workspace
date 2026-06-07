@@ -29,10 +29,17 @@ import com.airecorder.android.ui.animation.PageTransitions
 import com.airecorder.android.ui.animation.SharedElementOverlay
 import com.airecorder.android.ui.animation.SharedElementState
 import com.airecorder.android.ui.components.BottomNavigationBar
+import com.airecorder.android.ui.components.OfflineBanner
 import com.airecorder.android.ui.components.ToastContainer
+import com.airecorder.android.ui.components.rememberOfflineState
 import com.airecorder.android.ui.components.rememberToastManagerState
 import com.airecorder.android.ui.navigation.NavDestinations
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 import com.airecorder.android.ui.screens.DetailScreen
+import com.airecorder.android.ui.screens.HealthScreen
 import com.airecorder.android.ui.screens.LibraryScreen
 import com.airecorder.android.ui.screens.SettingsScreen
 import com.airecorder.android.ui.screens.UploadBottomSheet
@@ -50,28 +57,60 @@ fun AIRecorderApp(
     val actions = remember(navController) { AppActions(navController) }
     val toastManager = rememberToastManagerState()
     var showUploadSheet by remember { mutableStateOf(false) }
-    
+
     // 共享元素过渡状态
     val sharedElementState = remember { SharedElementState() }
-    
-    // 获取当前回退栈条目，用于判断是否显示底部导航栏
+
+    // ========== 离线监测 ==========
+    val context = LocalContext.current
+    val preferencesManager = remember {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext as android.app.Application,
+            PreferencesManagerEntryPoint::class.java
+        ).preferencesManager()
+    }
+    val serverUrl by preferencesManager.serverUrl.collectAsState(initial = "")
+
+    val isOffline = rememberOfflineState(
+        checkHealth = {
+            if (serverUrl.isBlank()) {
+                false // 未配置服务器不算离线
+            } else {
+                withContext(Dispatchers.IO) {
+                    try {
+                        val url = URL("${serverUrl.trimEnd('/')}/health")
+                        val conn = url.openConnection() as HttpURLConnection
+                        conn.connectTimeout = 5000
+                        conn.readTimeout = 5000
+                        conn.requestMethod = "GET"
+                        conn.responseCode == 200
+                    } catch (_: Exception) {
+                        false
+                    }
+                }
+            }
+        },
+        intervalMs = 30_000L
+    )
+
+    // 获取当前回退栈条目
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination?.route
-    
-    // 判断是否需要显示底部导航栏（仅在主页面显示）
+
+    // 底栏显示规则：仅在 3 个主页显示
     val showBottomBar = when (currentDestination) {
         NavDestinations.Library.route,
-        NavDestinations.Watch.route,
-        NavDestinations.Settings.route -> true
+        NavDestinations.Settings.route,
+        NavDestinations.Health.route -> true
         else -> false
     }
-    
-    // 获取当前导航目标，用于底部导航栏高亮
+
+    // 当前导航目标（用于底栏高亮）
     val currentNavDest = when (currentDestination) {
         NavDestinations.Library.route -> NavDestinations.Library
-        NavDestinations.Watch.route -> NavDestinations.Watch
         NavDestinations.Settings.route -> NavDestinations.Settings
-        else -> NavDestinations.Library // 默认
+        NavDestinations.Health.route -> NavDestinations.Health
+        else -> NavDestinations.Library
     }
 
     // 处理 DeepLink
@@ -82,9 +121,7 @@ fun AIRecorderApp(
                     val recordingId = deepLink.removePrefix("recording/")
                     actions.navigateToDetail(recordingId)
                 }
-                deepLink == "settings" -> {
-                    actions.navigateToSettings()
-                }
+                deepLink == "settings" -> actions.navigateToSettings()
             }
         }
     }
@@ -101,8 +138,8 @@ fun AIRecorderApp(
                     onNavigateTo = { dest ->
                         when (dest) {
                             NavDestinations.Library -> actions.navigateToLibrary()
-                            NavDestinations.Watch -> actions.navigateToWatch()
                             NavDestinations.Settings -> actions.navigateToSettings()
+                            NavDestinations.Health -> actions.navigateToHealth()
                             else -> {}
                         }
                     }
@@ -112,15 +149,22 @@ fun AIRecorderApp(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
+            // 离线横幅（所有页面顶部常驻）
+            OfflineBanner(
+                visible = isOffline && serverUrl.isNotBlank(),
+                modifier = Modifier.align(androidx.compose.ui.Alignment.TopCenter)
+            )
+
             // Toast 容器
             ToastContainer(toastManagerState = toastManager)
-            
+
             // 主要导航内容
             NavHost(
                 navController = navController,
                 startDestination = NavDestinations.Library.route,
                 modifier = Modifier.fillMaxSize()
             ) {
+                // ========== 3 个主页 ==========
                 composable(
                     route = NavDestinations.Library.route,
                     enterTransition = { PageTransitions.popEnterTransition },
@@ -132,14 +176,15 @@ fun AIRecorderApp(
                         LocalContext.current.applicationContext as android.app.Application,
                         PreferencesManagerEntryPoint::class.java
                     ).preferencesManager()
-                    
+
                     LibraryScreen(
                         preferencesManager = preferencesManager,
                         onNavigateToDetail = actions.navigateToDetail,
                         onUploadClick = { showUploadSheet = true },
                         sharedElementState = sharedElementState,
                         onRecordItemClick = { id, name, sub, coords ->
-                            val pos = coords?.positionInWindow() ?: androidx.compose.ui.geometry.Offset.Zero
+                            val pos = coords?.positionInWindow()
+                                ?: androidx.compose.ui.geometry.Offset.Zero
                             val bounds = Rect(
                                 pos.x, pos.y,
                                 pos.x + (coords?.size?.width ?: 0),
@@ -150,15 +195,7 @@ fun AIRecorderApp(
                         }
                     )
                 }
-                composable(
-                    route = NavDestinations.Watch.route,
-                    enterTransition = { PageTransitions.enterTransition },
-                    exitTransition = { PageTransitions.exitTransition },
-                    popEnterTransition = { PageTransitions.popEnterTransition },
-                    popExitTransition = { PageTransitions.popExitTransition }
-                ) {
-                    WatchScreen(onNavigateBack = actions.navigateBack)
-                }
+
                 composable(
                     route = NavDestinations.Settings.route,
                     enterTransition = { PageTransitions.enterTransition },
@@ -166,8 +203,23 @@ fun AIRecorderApp(
                     popEnterTransition = { PageTransitions.popEnterTransition },
                     popExitTransition = { PageTransitions.popExitTransition }
                 ) {
-                    SettingsScreen()
+                    SettingsScreen(
+                        onNavigateToWatch = actions.navigateToWatch,
+                        onNavigateBack = actions.navigateBack
+                    )
                 }
+
+                composable(
+                    route = NavDestinations.Health.route,
+                    enterTransition = { PageTransitions.enterTransition },
+                    exitTransition = { PageTransitions.exitTransition },
+                    popEnterTransition = { PageTransitions.popEnterTransition },
+                    popExitTransition = { PageTransitions.popExitTransition }
+                ) {
+                    HealthScreen()
+                }
+
+                // ========== 详情页 ==========
                 composable(
                     route = NavDestinations.Detail.ROUTE_TEMPLATE,
                     enterTransition = { PageTransitions.enterTransition },
@@ -185,6 +237,7 @@ fun AIRecorderApp(
                         sharedElementState = sharedElementState
                     )
                 }
+
                 composable(
                     route = NavDestinations.SummaryDetail.ROUTE_TEMPLATE,
                     enterTransition = { PageTransitions.enterTransition },
@@ -194,25 +247,38 @@ fun AIRecorderApp(
                 ) { backStackEntry ->
                     val summaryJson = backStackEntry.arguments?.getString("summaryJson") ?: ""
                     val summary = try {
-                        val decodedBytes = android.util.Base64.decode(summaryJson, android.util.Base64.URL_SAFE)
+                        val decodedBytes = android.util.Base64.decode(
+                            summaryJson, android.util.Base64.URL_SAFE
+                        )
                         val decodedJson = String(decodedBytes, Charsets.UTF_8)
                         Json.decodeFromString<Summary>(decodedJson)
                     } catch (_: Exception) {
                         null
                     }
-                    
+
                     if (summary != null) {
                         SummaryDetailScreen(
                             summary = summary,
                             onBack = actions.navigateBack,
-                            onDelete = { /* 后续实现删除逻辑 */ },
-                            onExport = { /* 后续实现导出逻辑 */ }
+                            onDelete = { /* 后续实现 */ },
+                            onExport = { /* 后续实现 */ }
                         )
                     }
                 }
+
+                // ========== 监控页（设置页内导航）==========
+                composable(
+                    route = NavDestinations.Watch.route,
+                    enterTransition = { PageTransitions.enterTransition },
+                    exitTransition = { PageTransitions.exitTransition },
+                    popEnterTransition = { PageTransitions.popEnterTransition },
+                    popExitTransition = { PageTransitions.popExitTransition }
+                ) {
+                    WatchScreen(onNavigateBack = actions.navigateBack)
+                }
             }
-            
-            // 共享元素飞入覆盖层（最上层）
+
+            // 共享元素飞入覆盖层
             if (sharedElementState.isTransitioning) {
                 SharedElementOverlay(
                     state = sharedElementState,
@@ -223,28 +289,30 @@ fun AIRecorderApp(
         }
     }
 
+    // 上传底部 Sheet
     if (showUploadSheet) {
         UploadBottomSheet(onDismiss = { showUploadSheet = false })
     }
 }
 
+/**
+ * 导航操作集合
+ */
 private class AppActions(navController: NavHostController) {
     val navigateToDetail: (String) -> Unit = { recordingId ->
         navController.navigate(NavDestinations.Detail.createRoute(recordingId))
     }
-    
+
     val navigateToSummaryDetail: (Summary) -> Unit = { summary ->
         navController.navigate(NavDestinations.SummaryDetail.createRoute(summary))
     }
-    
+
     val navigateToWatch: () -> Unit = {
         navController.navigate(NavDestinations.Watch.route) {
-            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
-            restoreState = true
         }
     }
-    
+
     val navigateToSettings: () -> Unit = {
         navController.navigate(NavDestinations.Settings.route) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -252,15 +320,25 @@ private class AppActions(navController: NavHostController) {
             restoreState = true
         }
     }
-    
+
     val navigateToLibrary: () -> Unit = {
         navController.navigate(NavDestinations.Library.route) {
+            // 点击"首页"主按钮：清空浏览栈，回到首页初始状态
+            popUpTo(navController.graph.findStartDestination().id) {
+                inclusive = true
+            }
+            launchSingleTop = true
+        }
+    }
+
+    val navigateToHealth: () -> Unit = {
+        navController.navigate(NavDestinations.Health.route) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
             restoreState = true
         }
     }
-    
+
     val navigateBack: () -> Unit = {
         navController.navigateUp()
     }

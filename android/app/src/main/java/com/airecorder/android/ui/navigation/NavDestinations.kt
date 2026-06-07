@@ -43,6 +43,7 @@ sealed class NavDestinations(val route: String) {
     }
     
     companion object {
-        val bottomNavDestinations = listOf(Library, Watch, Settings)
+        // 底栏 3-Tab: 录音库 | 设置 | 健康（监控整合到设置页）
+        val bottomNavDestinations = listOf(Library, Settings, Health)
     }
 }

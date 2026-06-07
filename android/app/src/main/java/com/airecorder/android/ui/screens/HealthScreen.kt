@@ -6,33 +6,32 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewModelScope
-import com.airecorder.android.R
 import com.airecorder.android.data.model.HealthResponse
 import com.airecorder.android.data.repository.SettingsRepository
-import com.airecorder.android.ui.components.BottomNavigationBar
-import com.airecorder.android.ui.components.ErrorState
-import com.airecorder.android.ui.components.LoadingState
-import com.airecorder.android.ui.navigation.NavDestinations
+import com.airecorder.android.ui.components.*
 import com.airecorder.android.ui.theme.*
 import com.airecorder.android.util.ErrorUtils
+import com.airecorder.android.util.FormatUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+// ============================================================
+// 健康面板 — 系统仪表盘（底栏 Tab 3）
+// ============================================================
 
 sealed class HealthUiState {
     data object Loading : HealthUiState()
@@ -48,9 +47,13 @@ class HealthViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<HealthUiState>(HealthUiState.Loading)
     val uiState: StateFlow<HealthUiState> = _uiState.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     fun loadHealth() {
         viewModelScope.launch {
             _uiState.value = HealthUiState.Loading
+            _isRefreshing.value = true
             repository.getHealth().fold(
                 onSuccess = { data ->
                     _uiState.value = HealthUiState.Success(data)
@@ -59,6 +62,7 @@ class HealthViewModel @Inject constructor(
                     _uiState.value = HealthUiState.Error(exception.message ?: "Unknown error")
                 }
             )
+            _isRefreshing.value = false
         }
     }
 }
@@ -66,16 +70,14 @@ class HealthViewModel @Inject constructor(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HealthScreen(
-    viewModel: HealthViewModel = hiltViewModel(),
-    onNavigateBack: () -> Unit,
-    onNavigateToLibrary: () -> Unit,
-    onNavigateToSettings: () -> Unit
+    viewModel: HealthViewModel = hiltViewModel()
 ) {
     LaunchedEffect(Unit) {
         viewModel.loadHealth()
     }
 
     val uiState by viewModel.uiState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     Scaffold(
         topBar = {
@@ -83,41 +85,42 @@ fun HealthScreen(
                 title = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.HealthAndSafety,
+                            imageVector = Icons.Default.MonitorHeart,
                             contentDescription = null,
-                            tint = Primary,
+                            tint = HealthGreen,
                             modifier = Modifier.size(24.dp)
                         )
                         Text(
-                            text = stringResource(R.string.health_title),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back),
-                            tint = TextPrimary
+                            text = "系统健康",
+                            style = TopBarTitleStyle,
+                            color = TextPrimary
                         )
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.loadHealth() }) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = stringResource(R.string.refresh),
-                            tint = TextSecondary
+                    if (isRefreshing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .padding(end = 12.dp),
+                            strokeWidth = 2.dp,
+                            color = Primary
                         )
+                    } else {
+                        IconButton(onClick = { viewModel.loadHealth() }) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "刷新",
+                                tint = TextSecondary
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Surface,
+                    containerColor = Background,
                     scrolledContainerColor = Surface
                 )
             )
@@ -133,10 +136,15 @@ fun HealthScreen(
         ) {
             when (val state = uiState) {
                 is HealthUiState.Loading -> {
-                    LoadingState(message = stringResource(R.string.loading_health))
+                    Box(
+                        modifier = Modifier.fillMaxSize().padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        LoadingIndicator()
+                    }
                 }
                 is HealthUiState.Success -> {
-                    HealthContent(state.data)
+                    HealthDashboardGrid(data = state.data)
                 }
                 is HealthUiState.Error -> {
                     ErrorState(
@@ -149,241 +157,212 @@ fun HealthScreen(
     }
 }
 
+/**
+ * 2×2 仪表盘网格 + 底部详情
+ */
 @Composable
-fun HealthContent(data: HealthResponse) {
+fun HealthDashboardGrid(data: HealthResponse) {
+    val isOnline = data.status == "ok"
+    val tunnelOk = data.tunnel?.connected == true
+
     Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        HealthStatusCard(
-            isOnline = data.status == "ok",
-            tunnelConnected = data.tunnel?.connected == true
-        )
-
-        SectionCard(
-            title = stringResource(R.string.service_status),
-            icon = Icons.Default.Dns
-        ) {
-            StatusItem(
-                title = stringResource(R.string.fastapi_backend),
-                isGood = data.status == "ok",
-                statusText = if (data.status == "ok") stringResource(R.string.status_ok) else stringResource(R.string.status_error),
-                isLast = false
-            )
-            StatusItem(
-                title = stringResource(R.string.cloudflare_tunnel),
-                isGood = data.tunnel?.connected == true,
-                statusText = if (data.tunnel?.connected == true) stringResource(R.string.status_connected) else stringResource(R.string.status_disconnected),
-                isLast = true
-            )
-        }
-
-        SectionCard(
-            title = stringResource(R.string.asr_engine),
-            icon = Icons.Default.Speaker
-        ) {
-            StatusItem(
-                title = stringResource(R.string.funasr_model),
-                isGood = data.funasr,
-                statusText = if (data.funasr) stringResource(R.string.status_loaded) else stringResource(R.string.status_error),
-                isLast = false
-            )
-            StatusItem(
-                title = stringResource(R.string.ffmpeg),
-                isGood = data.ffmpeg,
-                statusText = if (data.ffmpeg) stringResource(R.string.status_installed) else stringResource(R.string.status_error),
-                isLast = true
-            )
-        }
-
-        SectionCard(
-            title = stringResource(R.string.llm_config_health),
-            icon = Icons.Default.Psychology
-        ) {
-            StatusItem(
-                title = stringResource(R.string.api_connection),
-                isGood = data.llmConfigured,
-                statusText = if (data.llmConfigured) stringResource(R.string.status_ok) else stringResource(R.string.status_error),
-                isLast = false
-            )
-            InfoItem(
-                title = stringResource(R.string.current_model),
-                value = data.llmModel ?: stringResource(R.string.na)
-            )
-            InfoItem(
-                title = stringResource(R.string.settings_llm_provider),
-                value = data.llmProvider ?: stringResource(R.string.na)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(100.dp))
-    }
-}
-
-@Composable
-private fun HealthStatusCard(
-    isOnline: Boolean,
-    tunnelConnected: Boolean
-) {
-    Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // 整体状态横幅
+        OverallStatusBanner(isOnline = isOnline, tunnelOk = tunnelOk)
+
+        // 2×2 网格
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            DashboardCard(
+                modifier = Modifier.weight(1f),
+                title = "服务状态",
+                icon = Icons.Default.Dns,
+                iconTint = if (isOnline) HealthGreen else HealthRed
+            ) {
+                HealthStatusRow("FastAPI", if (isOnline) "在线" else "离线", if (isOnline) HealthGreen else HealthRed)
+                HealthStatusRow("Cloudflare", if (tunnelOk) "已连接" else "断开", if (tunnelOk) HealthGreen else HealthRed)
+            }
+
+            DashboardCard(
+                modifier = Modifier.weight(1f),
+                title = "转写引擎",
+                icon = Icons.Default.GraphicEq,
+                iconTint = if (data.funasr) HealthGreen else HealthRed
+            ) {
+                HealthStatusRow("FunASR", if (data.funasr) "已加载" else "未加载", if (data.funasr) HealthGreen else HealthRed)
+                HealthStatusRow("FFmpeg", if (data.ffmpeg) "已安装" else "未安装", if (data.ffmpeg) HealthGreen else HealthRed)
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            DashboardCard(
+                modifier = Modifier.weight(1f),
+                title = "LLM 配置",
+                icon = Icons.Default.Psychology,
+                iconTint = if (data.llmConfigured) HealthGreen else HealthRed
+            ) {
+                HealthStatusRow("API 连接", if (data.llmConfigured) "正常" else "异常", if (data.llmConfigured) HealthGreen else HealthRed)
+                InfoRow("当前模型", data.llmModel ?: "—")
+            }
+
+            DashboardCard(
+                modifier = Modifier.weight(1f),
+                title = "系统资源",
+                icon = Icons.Default.Memory,
+                iconTint = if ((data.system?.cpuPercent ?: 0.0) < 80.0) HealthGreen else HealthOrange
+            ) {
+                val sys = data.system
+                val cpuStr = if (sys != null && sys.cpuPercent >= 0) "${sys.cpuPercent.toInt()}%" else "—"
+                val memStr = sys?.memory?.let {
+                    "${FormatUtils.formatFileSize(it.used)} / ${FormatUtils.formatFileSize(it.total)}"
+                } ?: "—"
+                val diskStr = sys?.disk?.let {
+                    FormatUtils.formatFileSize(it.free) + " 可用"
+                } ?: "—"
+                val cpuColor = when {
+                    sys == null || sys.cpuPercent < 0 -> TextTertiary
+                    sys.cpuPercent > 80 -> HealthRed
+                    sys.cpuPercent > 50 -> HealthOrange
+                    else -> HealthGreen
+                }
+                HealthStatusRow("CPU", cpuStr, cpuColor)
+                InfoRow("内存", memStr)
+                InfoRow("磁盘", diskStr)
+            }
+        }
+
+        // 底部详情卡片
+        DashboardCard(
+            modifier = Modifier.fillMaxWidth(),
+            title = "运行详情",
+            icon = Icons.Default.Info,
+            iconTint = Primary
+        ) {
+            data.system?.let { sys ->
+                if (sys.uptimeSeconds > 0) {
+                    InfoRow("运行时长", FormatUtils.formatUptime(sys.uptimeSeconds))
+                }
+            }
+            InfoRow("Python", data.python ?: "—")
+            InfoRow("ASR 模型", data.asrModel ?: "—")
+            InfoRow("LLM 供应商", data.llmProvider ?: "—")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+/**
+ * 整体状态横幅
+ */
+@Composable
+private fun OverallStatusBanner(isOnline: Boolean, tunnelOk: Boolean) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (isOnline) StatusSuccessLight else StatusErrorLight
+            containerColor = if (isOnline) StatusSuccessLight.copy(alpha = 0.6f) else ErrorContainer
         ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = SmallCardShape
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
+            Icon(
+                imageVector = if (isOnline) Icons.Default.CheckCircle else Icons.Default.Warning,
+                contentDescription = null,
+                tint = if (isOnline) HealthGreen else Error,
+                modifier = Modifier.size(32.dp)
+            )
+            Column {
                 Text(
-                    text = if (isOnline) stringResource(R.string.system_online) else stringResource(R.string.system_offline),
+                    text = if (isOnline) "系统运行正常" else "系统异常",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isOnline) StatusSuccess else StatusError
+                    color = if (isOnline) TextPrimary else Error
                 )
                 Text(
-                    text = if (tunnelConnected) stringResource(R.string.tunnel_connected_hint) else stringResource(R.string.tunnel_disconnected_hint),
+                    text = if (isOnline) "所有服务在线" else "请检查 PC 端服务状态",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (isOnline) TextSecondary else TextTertiary
+                    color = TextTertiary
                 )
-            }
-            Surface(
-                color = if (isOnline) StatusSuccess else StatusError,
-                shape = CircleShape
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = if (isOnline) Icons.Default.CheckCircle else Icons.Default.Error,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(40.dp).padding(8.dp)
-                    )
-                }
             }
         }
     }
 }
 
+/**
+ * 仪表盘小卡片
+ */
 @Composable
-private fun SectionCard(
+private fun DashboardCard(
+    modifier: Modifier = Modifier,
     title: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconTint: Color,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+        modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = Surface),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        shape = SmallCardShape,
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+        Column(modifier = Modifier.padding(14.dp)) {
             Row(
-                modifier = Modifier.padding(bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = Primary,
-                    modifier = Modifier.size(20.dp)
+                    tint = iconTint,
+                    modifier = Modifier.size(18.dp)
                 )
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary
+                    style = MaterialTheme.typography.labelLarge,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
+            Spacer(modifier = Modifier.height(10.dp))
             content()
         }
     }
 }
 
+/**
+ * 信息行（标题: 值）
+ */
 @Composable
-private fun StatusItem(
-    title: String,
-    isGood: Boolean,
-    statusText: String,
-    isLast: Boolean = false
-) {
+private fun InfoRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            StatusIndicatorDot(isGood = isGood)
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
-            )
-        }
-        Text(
-            text = statusText,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Medium,
-            color = if (isGood) HealthGreen else StatusError
-        )
-    }
-    if (!isLast) {
-        HorizontalDivider(
-            color = DividerLight,
-            thickness = 1.dp,
-            modifier = Modifier.padding(vertical = 4.dp)
-        )
-    }
-}
-
-@Composable
-private fun InfoItem(
-    title: String,
-    value: String
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
-            text = title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = TextTertiary
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            color = TextPrimary
+            style = MaterialTheme.typography.bodySmall,
+            color = TextSecondary,
+            fontWeight = FontWeight.Medium
         )
     }
-}
-
-@Composable
-private fun StatusIndicatorDot(isGood: Boolean) {
-    Surface(
-        color = if (isGood) HealthGreen else StatusError,
-        shape = CircleShape,
-        modifier = Modifier.size(10.dp)
-    ) {}
 }

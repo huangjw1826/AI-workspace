@@ -4,38 +4,44 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
 
-// ========== Material 3 形状系统 ==========
+// ============================================================
+// 「有机录音室」形状系统 — 大圆角营造柔和触感
+// ============================================================
 
 // 圆角尺寸定义
-val ExtraSmallCornerSize = 4.dp
-val SmallCornerSize = 8.dp
-val MediumCornerSize = 12.dp
-val LargeCornerSize = 16.dp
-val ExtraLargeCornerSize = 24.dp
-val FullCornerSize = 50.dp
+val XSmallCorner = 4.dp
+val SmallCorner = 8.dp
+val MediumCorner = 12.dp
+val LargeCorner = 16.dp
+val XLargeCorner = 20.dp
+val FullCorner = 50.dp
 
 // 常用圆角形状
-val ExtraSmallShape = RoundedCornerShape(ExtraSmallCornerSize)
-val SmallShape = RoundedCornerShape(SmallCornerSize)
-val MediumShape = RoundedCornerShape(MediumCornerSize)
-val LargeShape = RoundedCornerShape(LargeCornerSize)
-val ExtraLargeShape = RoundedCornerShape(ExtraLargeCornerSize)
-val FullShape = RoundedCornerShape(FullCornerSize)
+val XSmallShape = RoundedCornerShape(XSmallCorner)
+val SmallShape = RoundedCornerShape(SmallCorner)
+val MediumShape = RoundedCornerShape(MediumCorner)
+val LargeShape = RoundedCornerShape(LargeCorner)
+val XLargeShape = RoundedCornerShape(XLargeCorner)
+val FullShape = RoundedCornerShape(FullCorner)
 
-// Material 3 官方形状规范
+// Material 3 形状规范
 val Shapes = Shapes(
-    extraSmall = ExtraSmallShape,      // 用于 Chip、Tooltip 等小组件
-    small = SmallShape,                // 用于 Button、TextField、Card 等
-    medium = MediumShape,              // 用于 NavigationDrawer、Dialog 等
-    large = LargeShape,                // 用于 BottomSheet、大 Card 等
-    extraLarge = ExtraLargeShape       // 用于最顶层的卡片或容器
+    extraSmall = RoundedCornerShape(6.dp),   // Chip、Tooltip
+    small = RoundedCornerShape(8.dp),         // Button、小型组件
+    medium = RoundedCornerShape(12.dp),       // Dialog、中型组件
+    large = RoundedCornerShape(16.dp),        // Card、大组件
+    extraLarge = RoundedCornerShape(24.dp)    // 最顶层容器
 )
 
-// 应用特定的形状
-val CardShape = LargeShape
-val BottomSheetShape = RoundedCornerShape(topStart = ExtraLargeCornerSize, topEnd = ExtraLargeCornerSize)
-val TextFieldShape = MediumShape
-val ButtonShape = MediumShape
-val FABShape = MediumShape
-val NavigationShape = SmallShape
-val ChipShape = ExtraSmallShape
+// ========== 应用特定形状 ==========
+
+val CardShape = RoundedCornerShape(16.dp)                    // 录音卡片
+val SmallCardShape = RoundedCornerShape(12.dp)               // 小卡片（健康面板）
+val BottomSheetShape = RoundedCornerShape(24.dp, 24.dp, 0.dp, 0.dp) // 底部弹出
+val TextFieldShape = RoundedCornerShape(12.dp)               // 搜索框、输入框
+val ButtonShape = RoundedCornerShape(12.dp)                  // 按钮
+val FABShape = RoundedCornerShape(20.dp)                     // FAB 悬浮按钮
+val ChipShape = RoundedCornerShape(20.dp)                    // 胶囊标签
+val BadgeShape = RoundedCornerShape(6.dp)                    // 状态徽章
+val NavIndicatorShape = RoundedCornerShape(16.dp)            // 导航指示器
+val StatusChipShape = RoundedCornerShape(6.dp)               // 状态小标签

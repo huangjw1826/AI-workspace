@@ -16,28 +16,25 @@ import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.airecorder.android.R
 import com.airecorder.android.data.model.Summary
-import com.airecorder.android.data.model.TranscriptSegment
 import com.airecorder.android.ui.animation.SharedElementState
 import com.airecorder.android.ui.components.*
 import com.airecorder.android.ui.screens.detail.*
-import com.airecorder.android.ui.theme.DividerLight
-import com.airecorder.android.ui.theme.TextSecondary
-import com.airecorder.android.ui.theme.TextTertiary
+import com.airecorder.android.ui.theme.*
 import com.airecorder.android.ui.util.rememberHapticFeedback
-import com.airecorder.android.util.AudioUtils
 import com.airecorder.android.util.ErrorUtils
 import com.airecorder.android.util.FormatUtils
 import kotlinx.coroutines.launch
 
+/**
+ * 录音详情页 — 沉浸式阅读
+ * Tab 切换：内容 | 摘要 | 信息
+ */
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun DetailScreen(
@@ -52,7 +49,7 @@ fun DetailScreen(
     LaunchedEffect(recordingId) {
         viewModel.loadRecording(recordingId)
     }
-    
+
     val uiState by viewModel.uiState.collectAsState()
     val selectedTab by viewModel.selectedTab.collectAsState()
     val isTranscribing by viewModel.isTranscribing.collectAsState()
@@ -64,37 +61,34 @@ fun DetailScreen(
     val audioPlaybackState by viewModel.audioPlaybackState.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
     val currentSegmentIndex by viewModel.currentSegmentIndex.collectAsState()
-    
+
     val pagerState = rememberPagerState(
         initialPage = selectedTab,
         pageCount = { 3 }
     )
-    
+
     val scope = rememberCoroutineScope()
     val hapticFeedback = rememberHapticFeedback()
-    
-    // 当详情页加载完成时结束共享元素过渡
+
     LaunchedEffect(uiState) {
         if (uiState is DetailUiState.Success && sharedElementState?.isTransitioning == true) {
-            kotlinx.coroutines.delay(300) // 等 300ms 让页面渲染
+            kotlinx.coroutines.delay(300)
             sharedElementState.endTransition()
         }
     }
-    
-    // Tab 点击 → Pager：使用 scrollToPage 即时跳转
+
     LaunchedEffect(selectedTab) {
         if (pagerState.currentPage != selectedTab) {
             pagerState.scrollToPage(selectedTab)
         }
     }
-    
-    // Pager 滑动 → Tab：单向同步回 ViewModel
+
     LaunchedEffect(pagerState.currentPage) {
         if (pagerState.currentPage != selectedTab) {
             viewModel.selectTab(pagerState.currentPage)
         }
     }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -106,11 +100,16 @@ fun DetailScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary
                             )
                         }
                         else -> {
-                            Text(stringResource(R.string.detail_title))
+                            Text(
+                                text = "录音详情",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = TextPrimary
+                            )
                         }
                     }
                 },
@@ -118,38 +117,44 @@ fun DetailScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back),
-                            tint = MaterialTheme.colorScheme.onSurface
+                            contentDescription = "返回",
+                            tint = OnSurface
                         )
                     }
                 },
                 actions = {
                     if (uiState is DetailUiState.Success) {
-                        IconButton(onClick = { hapticFeedback.performClick(); viewModel.refreshRecording() }) {
+                        IconButton(onClick = {
+                            hapticFeedback.performClick()
+                            viewModel.refreshRecording()
+                        }) {
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = "刷新",
-                                tint = MaterialTheme.colorScheme.onSurface
+                                tint = TextSecondary
                             )
                         }
                         IconButton(
-                            onClick = { hapticFeedback.performConfirm(); viewModel.deleteRecording(recordingId, onNavigateBack) }
+                            onClick = {
+                                hapticFeedback.performConfirm()
+                                viewModel.deleteRecording(recordingId, onNavigateBack)
+                            }
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
-                                contentDescription = stringResource(R.string.delete),
-                                tint = MaterialTheme.colorScheme.error
+                                contentDescription = "删除",
+                                tint = Error
                             )
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surface
+                    containerColor = Background,
+                    scrolledContainerColor = Surface
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Background,
         contentWindowInsets = WindowInsets.safeDrawing
     ) { paddingValues ->
         Column(
@@ -157,42 +162,51 @@ fun DetailScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            TabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.primary,
-                indicator = { tabPositions ->
-                    if (selectedTab < tabPositions.size) {
-                        TabRowDefaults.SecondaryIndicator(
-                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                },
-                divider = {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
-                }
+            // Tab 栏
+            Surface(
+                color = Surface,
+                shadowElevation = 1.dp
             ) {
-                TabItem(
-                    selected = selectedTab == 0,
-                    onClick = { viewModel.selectTab(0) },
-                    title = "内容",
-                    icon = Icons.Default.Audiotrack
-                )
-                TabItem(
-                    selected = selectedTab == 1,
-                    onClick = { viewModel.selectTab(1) },
-                    title = "摘要",
-                    icon = Icons.Default.AutoAwesome
-                )
-                TabItem(
-                    selected = selectedTab == 2,
-                    onClick = { viewModel.selectTab(2) },
-                    title = "信息",
-                    icon = Icons.Default.Info
-                )
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = Surface,
+                    contentColor = Primary,
+                    indicator = { tabPositions ->
+                        if (selectedTab < tabPositions.size) {
+                            Box(
+                                modifier = Modifier
+                                    .tabIndicatorOffset(tabPositions[selectedTab])
+                                    .padding(horizontal = 24.dp)
+                                    .height(3.dp)
+                                    .background(Primary, RoundedCornerShape(2.dp))
+                            )
+                        }
+                    },
+                    divider = {
+                        HorizontalDivider(color = Outline, thickness = 0.5.dp)
+                    }
+                ) {
+                    DetailTab(
+                        selected = selectedTab == 0,
+                        onClick = { viewModel.selectTab(0) },
+                        title = "内容",
+                        icon = Icons.Default.Audiotrack
+                    )
+                    DetailTab(
+                        selected = selectedTab == 1,
+                        onClick = { viewModel.selectTab(1) },
+                        title = "摘要",
+                        icon = Icons.Default.AutoAwesome
+                    )
+                    DetailTab(
+                        selected = selectedTab == 2,
+                        onClick = { viewModel.selectTab(2) },
+                        title = "信息",
+                        icon = Icons.Default.Info
+                    )
+                }
             }
-            
+
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -200,7 +214,7 @@ fun DetailScreen(
             ) {
                 when (val state = uiState) {
                     is DetailUiState.Loading -> {
-                        LoadingState(message = stringResource(R.string.loading_recording))
+                        SkeletonLoading()
                     }
                     is DetailUiState.Success -> {
                         HorizontalPager(
@@ -223,25 +237,19 @@ fun DetailScreen(
                                     }
                                     val isPlaying = playback is AudioPlaybackState.Playing
                                     val isBuffering = playback is AudioPlaybackState.Buffering
-                                    
+
                                     val playTabAudioState = when (val ds = audioDownloadState) {
                                         is AudioDownloadState.Downloading -> AudioState.Downloading(
-                                            ds.progress,
-                                            ds.downloaded,
-                                            ds.total
+                                            ds.progress, ds.downloaded, ds.total
                                         )
                                         is AudioDownloadState.Paused -> AudioState.Paused(
-                                            ds.progress,
-                                            ds.downloaded,
-                                            ds.total
+                                            ds.progress, ds.downloaded, ds.total
                                         )
                                         is AudioDownloadState.Downloaded -> AudioState.Downloaded
-                                        is AudioDownloadState.Error -> AudioState.Error(
-                                            ds.message
-                                        )
+                                        is AudioDownloadState.Error -> AudioState.Error(ds.message)
                                         else -> AudioState.NotDownloaded
                                     }
-                                    
+
                                     PlayTab(
                                         recordingDetail = state.data,
                                         audioState = playTabAudioState,
@@ -291,7 +299,7 @@ fun DetailScreen(
             }
         }
     }
-    
+
     if (showSummaryTemplates) {
         SummaryTemplateBottomSheet(
             templates = summaryTemplates,
@@ -305,7 +313,7 @@ fun DetailScreen(
 }
 
 @Composable
-fun TabItem(
+private fun DetailTab(
     selected: Boolean,
     onClick: () -> Unit,
     title: String,
@@ -315,24 +323,21 @@ fun TabItem(
         selected = selected,
         onClick = onClick,
         text = {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                )
-            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+            )
         },
-        selectedContentColor = MaterialTheme.colorScheme.primary,
-        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        icon = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp)
+            )
+        },
+        selectedContentColor = Primary,
+        unselectedContentColor = TextTertiary
     )
 }
 
@@ -346,8 +351,8 @@ fun SummaryTemplateBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        containerColor = Surface,
+        shape = BottomSheetShape
     ) {
         Column(
             modifier = Modifier
@@ -356,9 +361,10 @@ fun SummaryTemplateBottomSheet(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = stringResource(R.string.select_summary_template),
+                text = "选择摘要模板",
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary
             )
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
@@ -387,8 +393,8 @@ fun TemplateCard(
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        shape = SmallCardShape,
+        colors = CardDefaults.cardColors(containerColor = SurfaceVariant)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -397,13 +403,14 @@ fun TemplateCard(
             Text(
                 text = name,
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary
             )
             description?.let {
                 Text(
                     text = it,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = TextSecondary
                 )
             }
         }
