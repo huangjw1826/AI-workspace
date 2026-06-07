@@ -72,6 +72,7 @@ export function LibraryPage({
   clearAppliedStatus,
   clearAppliedSource,
   searchMatchPreviews,
+  allTags,
   selectRecording,
   handleDelete,
   runTranscription,
@@ -110,6 +111,7 @@ export function LibraryPage({
   clearAppliedStatus: (status: string) => void;
   clearAppliedSource: (source: string) => void;
   searchMatchPreviews: Record<string, string[]>;
+  allTags: string[];
   selectRecording: (id: string) => void;
   handleDelete: (recordingId: string, event: React.MouseEvent) => void;
   runTranscription: () => void;
@@ -201,11 +203,11 @@ export function LibraryPage({
           {/* Toolbar */}
           <div className="toolbar">
             <div className="toolbar-row">
-              <div className="search-box">
+              <div className="search-box search-box-wide">
                 <Search size={15} />
                 <input
                   value={draftFilters.query}
-                  placeholder="搜索文件名..."
+                  placeholder="搜索文件名、转写、摘要内容..."
                   onChange={(e) =>
                     setDraftFilters((d) => ({ ...d, query: e.target.value }))
                   }
@@ -214,11 +216,11 @@ export function LibraryPage({
                   }}
                 />
               </div>
-              <div className="search-box">
+              <div className="search-box search-box-tag">
                 <Tag size={15} />
                 <input
                   value={draftFilters.tag}
-                  placeholder="标签筛选..."
+                  placeholder="标签"
                   onChange={(e) =>
                     setDraftFilters((d) => ({ ...d, tag: e.target.value }))
                   }
@@ -460,6 +462,7 @@ export function LibraryPage({
           summaryTemplates={summaryTemplates}
           activeTask={activeTask}
           busy={busy}
+          allTags={allTags}
           runTranscription={runTranscription}
           runSummary={runSummary}
           cancelActiveTask={cancelActiveTask}

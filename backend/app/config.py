@@ -39,6 +39,12 @@ LLM_PROVIDER_DEFAULTS = {
         "temperature": 1.0,
         "top_p": 0.95,
     },
+    "ollama": {
+        "base_url": "http://localhost:11434/v1",
+        "model": "qwen2.5:7b",
+        "temperature": 0.2,
+        "top_p": None,
+    },
 }
 
 
@@ -97,6 +103,9 @@ class Settings(BaseSettings):
     watch_recursive: bool = True
     watch_interval_seconds: int = 10
     watch_stable_count: int = 2
+    watch_auto_transcribe: bool = False
+    watch_auto_summary: bool = False
+    watch_auto_summary_mode: str = "structured_summary"
 
     # --- 安全配置 ---
     api_token: str = ""

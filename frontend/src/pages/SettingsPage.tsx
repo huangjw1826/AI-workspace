@@ -177,6 +177,7 @@ export function SettingsPage({
               <option value="deepseek">DeepSeek</option>
               <option value="tongyi">通义千问</option>
               <option value="qwen">Qwen</option>
+              <option value="ollama">Ollama (本地)</option>
             </select>
           </label>
           <label>

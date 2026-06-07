@@ -115,15 +115,47 @@ class DirectoryWatcher:
                 try:
                     events = await asyncio.to_thread(self.scan_once, False)
                     # Emit SSE for new recordings
-                    imported = [e for e in events if e.status in ("imported", "synced") and e.recording_id]
+                    imported = [e for e in events if e.status in ("imported",) and e.recording_id]
                     if imported:
                         from app.services.sse_service import get_sse_service
                         sse = await get_sse_service()
                         for e in imported:
                             await sse.emit_recording_created(e.recording_id, e.filename)
+                        # Auto-process: trigger transcription and/or summary for newly imported recordings
+                        if settings.watch_auto_transcribe or settings.watch_auto_summary:
+                            await self._auto_process(settings, imported)
                 except Exception:
                     pass
             await asyncio.sleep(interval)
+
+    async def _auto_process(self, settings, imported_events: list[WatchEvent]) -> None:
+        """自动处理新导入的录音：触发转写和/或摘要。"""
+        from app.services.task_service import create_or_get_task
+        from app.pipeline.workflow import run_transcription_task, run_summary_task
+
+        for event in imported_events:
+            if not event.recording_id:
+                continue
+            try:
+                with Session(engine) as session:
+                    recording = session.get(Recording, event.recording_id)
+                    if not recording:
+                        continue
+                    if settings.watch_auto_transcribe:
+                        task, _ = create_or_get_task(session, recording, "transcribe")
+                        if task:
+                            asyncio.get_event_loop().run_in_executor(
+                                None, run_transcription_task, task.id
+                            )
+                    if settings.watch_auto_summary:
+                        mode = settings.watch_auto_summary_mode or "structured_summary"
+                        task, _ = create_or_get_task(session, recording, f"summary:{mode}")
+                        if task:
+                            asyncio.get_event_loop().run_in_executor(
+                                None, run_summary_task, task.id, mode
+                            )
+            except Exception:
+                pass
 
     def scan_once(self, force_stable: bool = True) -> list[WatchEvent]:
         """执行一次目录扫描。

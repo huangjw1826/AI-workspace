@@ -115,7 +115,7 @@ export interface LlmProviderDefault {
 
 /** LLM 当前设置 - GET/PUT /api/settings/llm */
 export interface LlmSettings {
-  provider: "deepseek" | "tongyi" | "qwen" | "mimo";
+  provider: "deepseek" | "tongyi" | "qwen" | "mimo" | "ollama";
   base_url: string;
   model: string;
   configured: boolean;
@@ -129,7 +129,7 @@ export interface LlmSettings {
 
 /** LLM 设置更新请求 */
 export interface LlmSettingsUpdate {
-  provider: "deepseek" | "tongyi" | "qwen" | "mimo";
+  provider: "deepseek" | "tongyi" | "qwen" | "mimo" | "ollama";
   api_key?: string;
   base_url?: string;
   model?: string;
@@ -180,6 +180,9 @@ export interface WatchSettings {
   interval_seconds: number;
   stable_count: number;
   exists: boolean;
+  auto_transcribe: boolean;
+  auto_summary: boolean;
+  auto_summary_mode: string;
 }
 
 /** 存储目录设置 - GET/PUT /api/settings/storage */

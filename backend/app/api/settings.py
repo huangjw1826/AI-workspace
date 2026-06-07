@@ -29,7 +29,7 @@ class LLMSettingsRead(BaseModel):
 
 
 class LLMSettingsUpdate(BaseModel):
-    provider: str = Field(pattern="^(deepseek|tongyi|qwen|mimo)$")
+    provider: str = Field(pattern="^(deepseek|tongyi|qwen|mimo|ollama)$")
     api_key: str = ""
     base_url: str = ""
     model: str = ""
@@ -46,6 +46,9 @@ class WatchSettingsRead(BaseModel):
     interval_seconds: int
     stable_count: int
     exists: bool
+    auto_transcribe: bool
+    auto_summary: bool
+    auto_summary_mode: str
 
 
 class WatchSettingsUpdate(BaseModel):
@@ -54,6 +57,9 @@ class WatchSettingsUpdate(BaseModel):
     recursive: bool = True
     interval_seconds: int = Field(default=10, ge=2, le=3600)
     stable_count: int = Field(default=2, ge=2, le=20)
+    auto_transcribe: bool = False
+    auto_summary: bool = False
+    auto_summary_mode: str = "structured_summary"
 
 
 class StorageSettingsRead(BaseModel):
@@ -236,6 +242,9 @@ def _watch_settings_payload() -> WatchSettingsRead:
         interval_seconds=settings.watch_interval_seconds,
         stable_count=settings.watch_stable_count,
         exists=bool(settings.resolved_watch_dir and settings.resolved_watch_dir.is_dir()),
+        auto_transcribe=settings.watch_auto_transcribe,
+        auto_summary=settings.watch_auto_summary,
+        auto_summary_mode=settings.watch_auto_summary_mode,
     )
 
 
@@ -263,6 +272,9 @@ def update_watch_settings(payload: WatchSettingsUpdate) -> WatchSettingsRead:
             "WATCH_RECURSIVE": "true" if payload.recursive else "false",
             "WATCH_INTERVAL_SECONDS": str(payload.interval_seconds),
             "WATCH_STABLE_COUNT": str(payload.stable_count),
+            "WATCH_AUTO_TRANSCRIBE": "true" if payload.auto_transcribe else "false",
+            "WATCH_AUTO_SUMMARY": "true" if payload.auto_summary else "false",
+            "WATCH_AUTO_SUMMARY_MODE": payload.auto_summary_mode,
         },
     )
     get_settings.cache_clear()

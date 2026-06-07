@@ -93,6 +93,29 @@ export function WatchPage({
           </span>
         </label>
 
+        <div className="form-grid">
+          <label className="check-line">
+            <input
+              type="checkbox"
+              checked={watchDraft.auto_transcribe}
+              onChange={(e) =>
+                setWatchDraft((d) => ({ ...d, auto_transcribe: e.target.checked }))
+              }
+            />
+            <span>自动转写新录音</span>
+          </label>
+          <label className="check-line">
+            <input
+              type="checkbox"
+              checked={watchDraft.auto_summary}
+              onChange={(e) =>
+                setWatchDraft((d) => ({ ...d, auto_summary: e.target.checked }))
+              }
+            />
+            <span>自动生成摘要</span>
+          </label>
+        </div>
+
         <div className="button-row">
           <button
             className="btn btn-primary"

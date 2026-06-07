@@ -1,5 +1,5 @@
 import React from "react";
-import { Clock3, FileAudio, Loader2, Sparkles, XCircle } from "lucide-react";
+import { Clock3, FileAudio, Loader2, Pause, Play, SkipBack, SkipForward, Sparkles, XCircle } from "lucide-react";
 import {
   formatDate,
   formatDuration,
@@ -7,6 +7,7 @@ import {
   taskLabel,
 } from "../../lib/format";
 import { apiUrl } from "../../lib/api";
+import { useAppStore } from "../../stores/appStore";
 import type { DetailTab } from "../../lib/viewTypes";
 import type {
   ExportFormat,
@@ -18,6 +19,8 @@ import { ExportButtons } from "../ui/ExportButtons";
 import { StatusBadge } from "../ui/StatusBadge";
 import { SummaryCard } from "./SummaryCard";
 
+const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
 export function RecordingDetailPanel({
   selected,
   detailTab,
@@ -27,6 +30,7 @@ export function RecordingDetailPanel({
   summaryTemplates,
   activeTask,
   busy,
+  allTags,
   runTranscription,
   runSummary,
   cancelActiveTask,
@@ -44,6 +48,7 @@ export function RecordingDetailPanel({
   summaryTemplates: SummaryTemplate[];
   activeTask: Task | null;
   busy: boolean;
+  allTags: string[];
   runTranscription: () => void;
   runSummary: (mode: string) => void;
   cancelActiveTask: () => void;
@@ -55,12 +60,20 @@ export function RecordingDetailPanel({
 }) {
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
   const [currentTime, setCurrentTime] = React.useState(0);
+  const [isPlaying, setIsPlaying] = React.useState(false);
+  const [playbackRate, setPlaybackRate] = React.useState(1);
   const [editingSegmentId, setEditingSegmentId] = React.useState<string | null>(null);
   const [segmentDraft, setSegmentDraft] = React.useState("");
   const [tagDraft, setTagDraft] = React.useState("");
   const [summaryPickerOpen, setSummaryPickerOpen] = React.useState(false);
   const [expandedSummaryIds, setExpandedSummaryIds] = React.useState<string[]>([]);
+  const [tagSuggestions, setTagSuggestions] = React.useState<string[]>([]);
+  const [showTagSuggestions, setShowTagSuggestions] = React.useState(false);
 
+  const setPlaybackPosition = useAppStore((s) => s.setPlaybackPosition);
+  const getPlaybackPosition = useAppStore((s) => s.getPlaybackPosition);
+
+  // Restore playback position when selecting a recording
   React.useEffect(() => {
     if (!selected) {
       setExpandedSummaryIds([]);
@@ -79,11 +92,89 @@ export function RecordingDetailPanel({
     setSegmentDraft("");
     setTagDraft(selected.recording.tags);
     setCurrentTime(0);
+    setIsPlaying(false);
     if (audioRef.current) {
       audioRef.current.pause();
-      audioRef.current.currentTime = 0;
+      const savedPos = getPlaybackPosition(selected.recording.id);
+      audioRef.current.currentTime = savedPos;
+      setCurrentTime(savedPos);
     }
   }, [selected?.recording.id, selected?.recording.tags, selected?.summaries.length]);
+
+  // Save playback position periodically and on unmount
+  React.useEffect(() => {
+    if (!selected) return;
+    const interval = window.setInterval(() => {
+      if (audioRef.current && currentTime > 0) {
+        setPlaybackPosition(selected.recording.id, currentTime);
+      }
+    }, 3000);
+    return () => {
+      window.clearInterval(interval);
+      if (audioRef.current && selected) {
+        setPlaybackPosition(selected.recording.id, audioRef.current.currentTime);
+      }
+    };
+  }, [selected?.recording.id, currentTime]);
+
+  // Keyboard shortcuts
+  React.useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!selected || !audioRef.current) return;
+      // Don't intercept when typing in inputs
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      switch (e.key) {
+        case " ":
+          e.preventDefault();
+          if (audioRef.current.paused) {
+            audioRef.current.play();
+          } else {
+            audioRef.current.pause();
+          }
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          audioRef.current.currentTime = Math.min(
+            audioRef.current.duration || 0,
+            audioRef.current.currentTime + 5
+          );
+          break;
+        case "[":
+          e.preventDefault();
+          setPlaybackRate((r) => {
+            const idx = SPEED_OPTIONS.indexOf(r);
+            const next = SPEED_OPTIONS[Math.max(0, idx - 1)];
+            if (audioRef.current) audioRef.current.playbackRate = next;
+            return next;
+          });
+          break;
+        case "]":
+          e.preventDefault();
+          setPlaybackRate((r) => {
+            const idx = SPEED_OPTIONS.indexOf(r);
+            const next = SPEED_OPTIONS[Math.min(SPEED_OPTIONS.length - 1, idx + 1)];
+            if (audioRef.current) audioRef.current.playbackRate = next;
+            return next;
+          });
+          break;
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selected]);
+
+  // Sync playbackRate to audio element
+  React.useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackRate;
+    }
+  }, [playbackRate]);
 
   if (!selected) {
     return (
@@ -194,14 +285,75 @@ export function RecordingDetailPanel({
               />
             ))}
           </div>
+          {/* Custom player controls */}
+          <div className="player-controls">
+            <button
+              className="btn btn-icon btn-sm"
+              onClick={() => {
+                if (audioRef.current) audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 10);
+              }}
+              title="后退 10 秒"
+            >
+              <SkipBack size={14} />
+            </button>
+            <button
+              className="btn btn-icon btn-sm player-play-btn"
+              onClick={() => {
+                if (!audioRef.current) return;
+                if (audioRef.current.paused) {
+                  audioRef.current.play();
+                } else {
+                  audioRef.current.pause();
+                }
+              }}
+              title={isPlaying ? "暂停 (空格)" : "播放 (空格)"}
+            >
+              {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+            </button>
+            <button
+              className="btn btn-icon btn-sm"
+              onClick={() => {
+                if (audioRef.current) {
+                  audioRef.current.currentTime = Math.min(
+                    audioRef.current.duration || 0,
+                    audioRef.current.currentTime + 10
+                  );
+                }
+              }}
+              title="前进 10 秒"
+            >
+              <SkipForward size={14} />
+            </button>
+            <div className="player-speed">
+              {SPEED_OPTIONS.map((rate) => (
+                <button
+                  key={rate}
+                  className={`btn btn-ghost btn-sm${playbackRate === rate ? " active" : ""}`}
+                  onClick={() => {
+                    setPlaybackRate(rate);
+                    if (audioRef.current) audioRef.current.playbackRate = rate;
+                  }}
+                  title={`${rate}x 倍速`}
+                >
+                  {rate}x
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Hidden native audio element for actual playback */}
           <audio
             ref={audioRef}
-            controls
             preload="metadata"
             src={audioSrc}
             onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-            onLoadedMetadata={(e) => setCurrentTime(e.currentTarget.currentTime)}
-            className="audio-element"
+            onLoadedMetadata={(e) => {
+              setCurrentTime(e.currentTarget.currentTime);
+              // Restore playback rate
+              e.currentTarget.playbackRate = playbackRate;
+            }}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            className="audio-element-hidden"
           />
         </section>
 
@@ -418,12 +570,56 @@ export function RecordingDetailPanel({
             <div className="tag-editor">
               <label className="tag-label">
                 <span>标签</span>
-                <input
-                  className="form-input"
-                  value={tagDraft}
-                  placeholder="用逗号分隔标签"
-                  onChange={(e) => setTagDraft(e.target.value)}
-                />
+                <div className="tag-input-wrapper">
+                  <input
+                    className="form-input"
+                    value={tagDraft}
+                    placeholder="用逗号分隔标签"
+                    onChange={(e) => {
+                      setTagDraft(e.target.value);
+                      // Show suggestions based on last typed tag
+                      const parts = e.target.value.split(",");
+                      const current = parts[parts.length - 1].trim().toLowerCase();
+                      if (current && allTags.length > 0) {
+                        const existing = new Set(parts.slice(0, -1).map((t) => t.trim().toLowerCase()));
+                        const suggestions = allTags.filter(
+                          (t) => t.toLowerCase().includes(current) && !existing.has(t.toLowerCase())
+                        ).slice(0, 8);
+                        setTagSuggestions(suggestions);
+                        setShowTagSuggestions(suggestions.length > 0);
+                      } else {
+                        setShowTagSuggestions(false);
+                      }
+                    }}
+                    onBlur={() => {
+                      // Delay hide to allow click on suggestion
+                      setTimeout(() => setShowTagSuggestions(false), 200);
+                    }}
+                    onFocus={() => {
+                      if (tagSuggestions.length > 0) setShowTagSuggestions(true);
+                    }}
+                  />
+                  {showTagSuggestions && (
+                    <div className="tag-suggestions">
+                      {tagSuggestions.map((tag) => (
+                        <button
+                          key={tag}
+                          className="tag-suggestion"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            const parts = tagDraft.split(",");
+                            parts[parts.length - 1] = " " + tag;
+                            const newDraft = parts.join(",");
+                            setTagDraft(newDraft);
+                            setShowTagSuggestions(false);
+                          }}
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </label>
               <button className="btn btn-secondary btn-sm" disabled={busy} onClick={saveTags}>
                 保存
